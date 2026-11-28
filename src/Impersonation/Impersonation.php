@@ -30,6 +30,7 @@ use Keyring\Sessions\RegisteredSession;
 use Keyring\Sessions\SessionAssurance;
 use Keyring\Sessions\Sessions;
 use Keyring\Support\Duration;
+use Keyring\Support\KeyedHash;
 use LogicException;
 use Symfony\Component\HttpFoundation\Response;
 use Throwable;
@@ -371,7 +372,7 @@ class Impersonation
 
     protected function claimKey(string $handle): string
     {
-        return 'keyring:impersonation-ended:'.sha1($handle);
+        return 'keyring:impersonation-ended:'.KeyedHash::make(KeyedHash::IMPERSONATION_ENDS, $handle);
     }
 
     /**
