@@ -228,7 +228,8 @@ class Impersonation
      * hasn't when handing it back throws. Then the impersonator's session
      * ends, and the browser is signed out, before it's thrown on.
      *
-     * Only one request ends an impersonation, however many of the
+     * Only one request ends an impersonation (or, signing out, announces
+     * it: signedOut() claims it too), however many of the
      * browser's find it over at once, such as XHRs sent as its time ran
      * out, or a copy of the session from before another request ended it:
      * the one that claims its end (claim()). That's whoever revoked its
@@ -452,7 +453,9 @@ class Impersonation
 
         $this->forget($request);
 
-        if ($announce) {
+        // Whoever else finds it over, a stale copy of the session say,
+        // leaves it to this one: it's announced once, not again as lost.
+        if ($announce && $this->claim($parked['handle'] ?? null, $parked['expires_at'])) {
             ImpersonationEnded::dispatch($impersonator, $user, ImpersonationEndReason::SignedOut, false, $parked['handle'] ?? null);
         }
     }

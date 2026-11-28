@@ -1689,6 +1689,41 @@ describe('two requests ending it', function () {
         expect($this->get('/whoami')->assertOk()->getContent())->toBe((string) $this->admin->getKey());
     })->with(['database', 'cache']);
 
+    it('announces a sign-out once when a copy of the session from before it ends it again', function (string $driver) {
+        config(['keyring.sessions.driver' => $driver]);
+        $ended = impersonationsEnded();
+        adminSignsIn();
+        impersonate($this->user);
+        $during = session()->all();
+
+        $this->post('/logout');
+
+        sendBackSession($during);
+        Cookie::flushQueuedCookies();
+        $this->getJson('/whoami')->assertUnauthorized();
+
+        expect($ended)->toHaveCount(1)
+            ->and($ended[0]->reason)->toBe(ImpersonationEndReason::SignedOut)
+            ->and(SecurityEvent::query()->where('type', 'impersonation_ended')->count())->toBe(2);
+    })->with(['database', 'cache']);
+
+    it('doesn\'t announce a sign-out again when a copy of the session signs out after another request ended it', function (string $driver) {
+        config(['keyring.sessions.driver' => $driver]);
+        $ended = impersonationsEnded();
+        adminSignsIn();
+        impersonate($this->user);
+        $during = session()->all();
+
+        $this->travel(61)->minutes();
+        $this->get('/whoami')->assertRedirect('/dashboard');
+
+        sendBackSession($during);
+        $this->post('/logout');
+
+        expect($ended)->toHaveCount(1)
+            ->and(SecurityEvent::query()->where('type', 'impersonation_ended')->count())->toBe(2);
+    })->with(['database', 'cache']);
+
     it('ends it once when two requests find it over together, and only one revokes it', function () {
         $ended = impersonationsEnded();
         $own = impersonating();
