@@ -9,6 +9,7 @@ use App\Actions\Keyring\ResetUserPassword;
 use App\Actions\Keyring\UpdateUserPassword;
 use App\Actions\Keyring\ValidateEmailChange;
 use Carbon\CarbonImmutable;
+use ErrorException;
 use Illuminate\Auth\Events\Registered;
 use Illuminate\Auth\Listeners\SendEmailVerificationNotification;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -87,6 +88,28 @@ abstract class TestCase extends Orchestra
         // Laravel's own listener for new users, which an app's event service
         // provider registers and testbench leaves out.
         Event::listen(Registered::class, SendEmailVerificationNotification::class);
+    }
+
+    /**
+     * Throw deprecations, as Laravel's own version does, except one Laravel
+     * itself raises on Symfony 8.2 and has fixed for its next release
+     * (laravel/framework#62654). Remove this once that release is out.
+     */
+    protected function withoutDeprecationHandling(): static
+    {
+        $this->originalDeprecationHandler ??= set_error_handler(function (int $level, string $message, string $file = '', int $line = 0): bool {
+            if (str_contains($message, 'Directly setting property "headers" of "Illuminate\\Http\\')) {
+                return true;
+            }
+
+            if (in_array($level, [E_DEPRECATED, E_USER_DEPRECATED], true) || (error_reporting() & $level)) {
+                throw new ErrorException($message, 0, $level, $file, $line);
+            }
+
+            return true;
+        });
+
+        return $this;
     }
 
     /**
