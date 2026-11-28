@@ -29,7 +29,7 @@ The package has four entry points:
 
 | Import | Contains |
 |---|---|
-| `@keyringjs/keyring` | WebAuthn helpers, enrollment and session helpers, `passkeyCredential()`, `signInWithProvider()`, `linkProvider()` and `confirmWithProvider()` for single sign-on, `json()` and `configureRequests()`, routes, and types. No framework code. |
+| `@keyringjs/keyring` | WebAuthn helpers, enrollment and session helpers, `passkeyCredential()`, `signInWithProvider()`, `linkProvider()` and `confirmWithProvider()` for single sign-on, `impersonate()` and `stopImpersonating()` for impersonation, `json()` and `configureRequests()`, routes, and types. No framework code. |
 | `@keyringjs/keyring/inertia` | The challenge helpers, for Inertia with any framework. |
 | `@keyringjs/keyring/vue` | Everything above, plus `useChallenge()` and `usePasskeyLogin()` for Vue. |
 | `@keyringjs/keyring/react` | Everything above, plus `useChallenge()` and `usePasskeyLogin()` for React. |

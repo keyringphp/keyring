@@ -43,6 +43,7 @@ return [
         Features::devices(),
         Features::emailChanges(),
         Features::securityLog(),
+        Features::impersonation(),
     ],
 
     /*

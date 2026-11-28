@@ -54,6 +54,8 @@ The middleware counts everything proved so far in the session, so it only asks f
 
 A level doesn't last for the whole session. It lapses after its idle and overall limits. By default, at AAL2, those are an hour without a request or 24 hours, as NIST SP 800-63B-4 asks. After that, the next `keyring:aal2` route asks again. See [Timeouts](devices-and-sessions.md#timeouts). To end the session at that point instead, see [Ending a Session With Its Level](devices-and-sessions.md#ending-a-session-with-its-level). The idle limit is tracked by the [session middleware](devices-and-sessions.md#the-session-registry), which Keyring adds to the `web` group. Routes outside that group, such as Sanctum's `api` group, need `keyring.session` too. A [risk response](risk.md#checkpoints) can also clear a level. An authenticator that's removed stops counting in every session it was used in.
 
+A browser that's [impersonating](impersonation.md#whats-refused-while-impersonating) the user can't step up as them: a level it hasn't reached, or a fresh verification, is refused with a `403` rather than a confirm.
+
 Users who don't have the authenticators to reach a level can't get there by confirming. Instead, they're sent to your [`enrollment_url`](configuration.md#account-changes-and-enrollment) with the `enroll-first` status, the same as the [`keyring.enrolled`](policies.md#requiring-a-second-factor) middleware does. JSON requests get a `403` with that status and the URL. Without an `enrollment_url`, they get a plain `403`.
 
 To check the session's level in your own code, ask `Keyring\Sessions\SessionAssurance`:

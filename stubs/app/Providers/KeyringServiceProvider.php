@@ -71,6 +71,10 @@ class KeyringServiceProvider extends ServiceProvider
             // Signals\ImpossibleTravel::class,
         ]);
 
+        // Who may sign in as whom, with Features::impersonation() on in
+        // config/keyring.php. Until this says so, nobody may. See "Impersonation".
+        // Keyring::allowImpersonationWhen(fn ($impersonator, $user) => $impersonator->is_admin && ! $user->is_admin);
+
         // Your code for the account changes, in app/Actions/Keyring. Keyring
         // does the security work around them.
         Keyring::createUsersUsing(CreateNewUser::class);

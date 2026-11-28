@@ -856,13 +856,13 @@ describe('whose verification waives the current address', function () {
         $this->travel(1)->minutes();
 
         // An app's own "become this user", without clearing what the session proved.
-        Route::middleware(['web', 'auth'])->post('/impersonate/{id}', function (string $id) {
+        Route::middleware(['web', 'auth'])->post('/become/{id}', function (string $id) {
             session()->forget(Sessions::KEY);
             Auth::guard('web')->login(User::findOrFail($id));
 
             return 'ok';
         });
-        $this->post('/impersonate/'.$this->user->getKey())->assertOk();
+        $this->post('/become/'.$this->user->getKey())->assertOk();
         $this->travel(1)->seconds();
 
         $this->postJson(route('keyring.email.store'), ['email' => 'new@example.com'])->assertOk();

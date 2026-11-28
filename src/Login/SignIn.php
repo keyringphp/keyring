@@ -17,6 +17,7 @@ use Keyring\Events\Authenticated;
 use Keyring\Events\Confirmed;
 use Keyring\Events\NewDeviceSignedIn;
 use Keyring\Features;
+use Keyring\Impersonation\Impersonation;
 use Keyring\KeyringManager;
 use Keyring\Models\Authenticator;
 use Keyring\Models\SecurityEvent;
@@ -46,6 +47,21 @@ class SignIn
 
         if (! $this->keyring->belongsToGuard($user) || ! $this->keyring->allowsSignIn($user)) {
             throw ValidationException::withMessages([$this->keyring->username() => __('auth.failed')]);
+        }
+
+        // Signing in on a session that still holds an impersonation, one
+        // whose user was deleted say, leaves nothing parked for the next
+        // request to go back to. When the registry fails at that, the
+        // browser is signed out before it's thrown on, rather than carrying
+        // on as whoever it was impersonating, on an impersonation that has
+        // been announced as ended. The guard's sign-out tries the parked
+        // session again.
+        try {
+            app(Impersonation::class)->signedOut($request);
+        } catch (Throwable $e) {
+            $this->signOutGuard($request);
+
+            throw $e;
         }
 
         $this->keyring->guard()->login($user, $attempt->remember);
@@ -78,10 +94,7 @@ class SignIn
             try {
                 $this->out($request, onlyThisBrowser: true);
             } catch (Throwable) {
-                $guard = $this->keyring->guard();
-
-                $guard instanceof SessionGuard ? $guard->logoutCurrentDevice() : $guard->logout();
-                $request->session()->invalidate();
+                $this->signOutGuard($request);
             }
 
             throw $e;
@@ -119,6 +132,19 @@ class SignIn
         if ($new) {
             NewDeviceSignedIn::dispatch($user, $device);
         }
+    }
+
+    /**
+     * Sign the guard out of this browser, and empty its session, without
+     * the registry: for when that is what failed. The "remember me" token
+     * is left as it is.
+     */
+    protected function signOutGuard(Request $request): void
+    {
+        $guard = $this->keyring->guard();
+
+        $guard instanceof SessionGuard ? $guard->logoutCurrentDevice() : $guard->logout();
+        $request->session()->invalidate();
     }
 
     /**
@@ -187,17 +213,32 @@ class SignIn
      * does. A session that ends on its own (a timeout, say) leaves the token
      * alone, or one ending would sign out every remembered browser: its
      * record is revoked, and that is what stops this browser's cookies
-     * bringing it back (Sessions::end).
+     * bringing it back (Sessions::end). Nor does signing out of an
+     * impersonation: the token is the user's, and they didn't sign out.
+     * When the registry fails then, it's the impersonator's token that's
+     * cycled, if any: the browser's "remember me" cookies are theirs, and
+     * their parked session, which would refuse them, may still be open
+     * (Impersonation::signedOut).
      */
     public function out(Request $request, bool $onlyThisBrowser = false): ?Authenticatable
     {
         $guard = $this->keyring->guard();
         $user = $guard->user();
+        $impersonating = app(Impersonation::class)->active($request);
+
+        // Signing out of an impersonation is the impersonator's doing, so
+        // the user's own "remember me" token is left alone.
+        $onlyThisBrowser = $onlyThisBrowser || $impersonating;
 
         // Signed out whatever happens to the registry: a revocation that
         // fails is thrown on, but never leaves the browser signed in with no
-        // record, for the next request to register afresh.
+        // record, for the next request to register afresh. The
+        // impersonator's parked session ends with this one.
         try {
+            if ($impersonating) {
+                app(Impersonation::class)->signedOut($request);
+            }
+
             $this->sessions->end($request);
         } finally {
             $onlyThisBrowser && $guard instanceof SessionGuard ? $guard->logoutCurrentDevice() : $guard->logout();

@@ -63,7 +63,7 @@ The built-in signals live in `Keyring\Risk\Signals`:
 | `ImpossibleTravel` | The last located sign in was 500 km or more away, and getting here since would mean travelling faster than 900 km/h. It needs a locator with coordinates. | 60 | login |
 | `RepeatedFactorFailures` | Five or more second factors failed after a correct password, or a sign in with an identity provider, in the last 15 minutes (the `within` option). Ten or more doubles the score. | 25 | login |
 | `RecentlyChangedRecovery` | The email address changed (or was changed back) within `risk.recent_change` (7 days). | 25 | login |
-| `InactiveAccount` | The account last signed in 90 days ago or more (the `after` option), and none of its sessions has been used since. | 30 | login |
+| `InactiveAccount` | The account last signed in 90 days ago or more (the `after` option), and none of its sessions has been used since. A session someone is [impersonating](impersonation.md) it in doesn't count. | 30 | login |
 | `SuccessAfterFailures` | The first factor was right after five or more failed attempts on the account (the `threshold` option) in the last hour (`within`), counted since it last signed in. | 30 | login |
 | `CredentialStuffing` | The first factor was right, and in the last hour (`within`) five or more other accounts (`threshold`) failed a factor from the same IP address. The published provider leaves it off. Keyring's own response [tells the user](#telling-the-user). | 40 | login |
 | `SessionFingerprintChanged` | A signed-in session now comes from a different browser or platform than the one it was last seen in. IP changes alone don't count. | 60 | every request |

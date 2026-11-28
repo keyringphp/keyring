@@ -33,9 +33,11 @@ This page lists all of them, along with where each one is explained. The [Recipe
 | Validation and status messages | The `keyring-lang` translation files | [Messages and Translations](configuration.md#messages-and-translations) |
 | The route prefix, domain, and middleware | `prefix`, `domain`, and `middleware` | [Routes](configuration.md#routes) |
 | The middleware on account changes | `changes_middleware` | [Account Changes and Enrollment](configuration.md#account-changes-and-enrollment) |
+| What starting an impersonation takes, how long it lasts, and whether the user sees it | `impersonation.*` | [Impersonation](configuration.md#impersonation) |
 | The form rate limits | The `keyring`, `keyring-pages`, and `keyring-login-options` rate limiters | [Rate Limits](configuration.md#pending-logins-timebox-and-rate-limits) |
 | Who may sign in at all | `Keyring::allowSignInWhen()` | [Who May Sign In](sign-in-flow.md#who-may-sign-in) |
 | Who may add a sign-in method | `Keyring::allowEnrollmentWhen()` | [Who May Enroll](authenticators.md#who-may-enroll) |
+| Who may impersonate whom | `Keyring::allowImpersonationWhen()` | [Who May Impersonate Whom](impersonation.md#who-may-impersonate-whom) |
 | Whether registration says when an address is taken | `registration.reveal_taken` | [Registration](sign-in-flow.md#registration) |
 | Whether registering signs the user in, when it says so | `Keyring::signInAfterRegistering()` | [Saying When an Address Is Taken](sign-in-flow.md#saying-when-an-address-is-taken) |
 | Risk signals and what they do | `Keyring::risk()`, your own `Signal` | [Risk](risk.md) |

@@ -91,6 +91,17 @@
             "sweep_every": null,
             "sweep_limit": 1000
         },
+        "impersonation": {
+            "lifetime": "1h",
+            "show_in_sessions": true,
+            "show_in_activity": true,
+            "middleware": [
+                "keyring:aal2",
+                "keyring.fresh:15m"
+            ],
+            "redirect_url": null,
+            "return_url": null
+        },
         "protected": [],
         "email_changes": {
             "confirmable_for": "24h",
@@ -176,6 +187,8 @@
         "keyring.email.revert.store": "POST /email-changes/{change}/revert",
         "keyring.email.show": "GET /user/email",
         "keyring.email.store": "POST /user/email",
+        "keyring.impersonation.destroy": "POST|DELETE /impersonate",
+        "keyring.impersonation.store": "POST /impersonate/{user}",
         "keyring.login.challenge": "GET /login/challenge/{factor?}",
         "keyring.login.factor": "POST /login/{factor}",
         "keyring.login.options": "GET /login/{factor}/options",
@@ -206,6 +219,7 @@
         "keyring",
         "keyring.enrolled",
         "keyring.fresh",
+        "keyring.not-impersonating",
         "keyring.password",
         "keyring.session",
         "keyring.signed"
@@ -218,7 +232,8 @@
         "manage-authenticators",
         "devices",
         "email-changes",
-        "security-log"
+        "security-log",
+        "impersonation"
     ],
     "emails": [
         "new_device",
@@ -242,8 +257,10 @@
     "facade": [
         "activity(Illuminate\\Contracts\\Auth\\Authenticatable&Illuminate\\Database\\Eloquent\\Model $user, int $limit = 25): Illuminate\\Support\\Collection",
         "allowEnrollmentWhen(Closure $callback): static",
+        "allowImpersonationWhen(Closure $callback): static",
         "allowSignInWhen(Closure $callback): static",
         "allowsEnrollment(Illuminate\\Contracts\\Auth\\Authenticatable&Illuminate\\Database\\Eloquent\\Model $user): bool",
+        "allowsImpersonation(Illuminate\\Contracts\\Auth\\Authenticatable&Illuminate\\Database\\Eloquent\\Model $impersonator, Illuminate\\Contracts\\Auth\\Authenticatable&Illuminate\\Database\\Eloquent\\Model $user): bool",
         "allowsSignIn(Illuminate\\Contracts\\Auth\\Authenticatable&Illuminate\\Database\\Eloquent\\Model $user): bool",
         "attempt(Illuminate\\Http\\Request $request, string $factor = Keyring\\Factors\\Password::KEY): Symfony\\Component\\HttpFoundation\\Response",
         "authenticatorModel(): string",
@@ -267,6 +284,11 @@
         "hasFactor(string $key): bool",
         "hasNotification(string $type): bool",
         "hidesRegisteredAddresses(): bool",
+        "impersonate(Illuminate\\Http\\Request $request, Illuminate\\Contracts\\Auth\\Authenticatable&Illuminate\\Database\\Eloquent\\Model $user): void",
+        "impersonating(?Illuminate\\Http\\Request $request = null): bool",
+        "impersonation(?Illuminate\\Http\\Request $request = null): ?array",
+        "impersonationRefusal(Illuminate\\Contracts\\Auth\\Authenticatable&Illuminate\\Database\\Eloquent\\Model $impersonator, Illuminate\\Contracts\\Auth\\Authenticatable&Illuminate\\Database\\Eloquent\\Model $user): ?Keyring\\Enums\\ImpersonationRefusal",
+        "impersonator(?Illuminate\\Http\\Request $request = null): (Illuminate\\Contracts\\Auth\\Authenticatable&Illuminate\\Database\\Eloquent\\Model)|null",
         "linkRoot(): string",
         "linkRootUsing(Closure $callback): static",
         "normalizeUsername(string $username): string",
@@ -300,6 +322,7 @@
         "sso(): Keyring\\Sso\\Sso",
         "statusMessage(mixed $status): ?string",
         "steps(): array",
+        "stopImpersonating(Illuminate\\Http\\Request $request): (Illuminate\\Contracts\\Auth\\Authenticatable&Illuminate\\Database\\Eloquent\\Model)|null",
         "unlistedActivityTypes(): array",
         "unlock(Illuminate\\Contracts\\Auth\\Authenticatable&Illuminate\\Database\\Eloquent\\Model $user, ?string $factor = null): void",
         "updateUserPasswordsUsing(string $action): static",
@@ -598,6 +621,18 @@
             "attempt",
             "authenticator",
             "verification"
+        ],
+        "Keyring\\Events\\ImpersonationEnded": [
+            "handle",
+            "impersonator",
+            "reason",
+            "returned",
+            "user"
+        ],
+        "Keyring\\Events\\ImpersonationStarted": [
+            "handle",
+            "impersonator",
+            "user"
         ],
         "Keyring\\Events\\LinkRefused": [
             "link",

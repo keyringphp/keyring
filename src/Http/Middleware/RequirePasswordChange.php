@@ -10,6 +10,7 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Uri;
 use Keyring\Changes\PasswordHolds;
 use Keyring\Contracts\Responses\PasswordChangeRequiredResponse;
+use Keyring\Impersonation\Impersonation;
 use Keyring\KeyringManager;
 use Keyring\Login\Detours;
 use Symfony\Component\HttpFoundation\Response;
@@ -18,7 +19,8 @@ use Symfony\Component\HttpFoundation\Response;
  * Keeps a user who has to choose a new password (Keyring::requirePasswordChange(),
  * or a risk response) on the page where they do, keyring.password_change_url,
  * until they have. Guests are let through, so it sits in the web group next
- * to the session middleware.
+ * to the session middleware. So is a browser impersonating someone: only
+ * the user can choose their password.
  */
 class RequirePasswordChange
 {
@@ -40,7 +42,7 @@ class RequirePasswordChange
     {
         $user = $this->keyring->guard()->user();
 
-        if (! $user instanceof Model || ! $request->hasSession() || $this->isExcepted($request) || ! $this->holds->holdsSession($user)) {
+        if (! $user instanceof Model || ! $request->hasSession() || $this->isExcepted($request) || app(Impersonation::class)->active($request) || ! $this->holds->holdsSession($user)) {
             return $next($request);
         }
 

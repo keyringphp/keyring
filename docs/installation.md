@@ -46,7 +46,7 @@ php artisan keyring:install --factor=totp --factor=passkeys --feature=registrati
 | Option | Values |
 |---|---|
 | `--factor` | `totp`, `passkeys`, `security-keys`, or `email-codes`. `none` keeps the password alone without asking. |
-| `--feature` | `registration`, `reset-passwords`, `email-verification`, `update-passwords`, `manage-authenticators`, `devices`, `email-changes`, or `security-log`. |
+| `--feature` | `registration`, `reset-passwords`, `email-verification`, `update-passwords`, `manage-authenticators`, `devices`, `email-changes`, `security-log`, or `impersonation`. |
 | `--require-second-factor`, `--optional-second-factor` | Answer the second question. |
 
 The `--feature` option replaces the defaults (`registration`, `reset-passwords`, `email-verification`, `update-passwords`, and `security-log`), so list those too if you want them. An unknown value stops the command before it writes anything, and so does requiring a second factor without a sign-in method that counts.
@@ -67,6 +67,7 @@ The `keyring:install` command publishes the following files:
 | `database/migrations/*_create_keyring_*_table.php` | Eight tables: `keyring_authenticators`, `keyring_devices`, `keyring_sessions`, `keyring_pending_changes`, `keyring_events`, `keyring_failure_counts`, `keyring_password_holds`, and `keyring_sign_in_changes`. They're all created now, so you won't need a new migration to turn on a feature later. Tables for features you don't use stay empty. |
 | `database/migrations/*_add_origin_to_keyring_sessions_table.php` | Adds the `origin` column to `keyring_sessions`, which lets a session keep its [handle](devices-and-sessions.md#listing-and-ending-sessions) when it moves to a new record. |
 | `database/migrations/*_add_announcements_to_keyring_sessions_table.php` | Adds `announced_at`, `end_reason`, `announce_attempts`, and `announce_after` to `keyring_sessions`, which let [`keyring:sweep`](devices-and-sessions.md#sweeping-ended-sessions) announce every session that ends. |
+| `database/migrations/*_add_impersonation_to_keyring_sessions_table.php` | Adds `impersonator_id`, `impersonator_type`, and `impersonator_session` to `keyring_sessions`, which [impersonation](impersonation.md) needs. Only an impersonated session writes them. |
 | `app/Providers/KeyringServiceProvider.php` | Where you register sign-in methods, the policy, the risk signals, and your actions. It lists every sign-in method, with the ones you didn't pick commented out. It does the same for the `keyring.enrolled` middleware, which requires a second factor, and for the [risk signals](risk.md) that your features can't feed yet. To add one later, uncomment its line. The provider is added to `bootstrap/providers.php` for you. |
 | `app/Actions/Keyring/*.php` | Your code for the features that need it. All of these are published and registered, so a feature works as soon as you turn it on: registration (`CreateNewUser`), password resets (`ResetUserPassword`), password changes (`UpdateUserPassword`), email change requests (`ValidateEmailChange`), and the password rules they share (`PasswordValidationRules`). Keyring does the security work around them. |
 

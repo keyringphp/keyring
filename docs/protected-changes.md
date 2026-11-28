@@ -370,7 +370,7 @@ When `Features::emailVerification()` is on, Keyring provides Laravel's verificat
 Laravel verifies the address as soon as the link is opened. Keyring doesn't. Like its other emailed links, this one opens a page with a button, and only the button changes anything. So nothing that fetches the link by itself verifies an address, and no `GET` in Keyring changes state.
 
 - `GET /email/verify/{id}/{hash}` renders the `email-verification` page with `email` (the address being verified), `url`, `expires`, and `signature`. It changes nothing. Someone who's already verified is sent on to `home`.
-- A `POST` to `url`, with `expires` and `signature` in the body, verifies the address. `url` is the link's path without its query string, so the signature isn't in the URL of the request that acts.
+- A `POST` to `url`, with `expires` and `signature` in the body, verifies the address. `url` is the link's path without its query string, so the signature isn't in the URL of the request that acts. It's refused while [impersonating](impersonation.md#whats-refused-while-impersonating), as sending another link is.
 
 ```html
 <form method="POST" action="{{ $url }}">

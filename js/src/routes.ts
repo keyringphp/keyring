@@ -28,6 +28,8 @@ export const routes = {
   ssoRedirect: (provider: string) => `${prefix}/auth/${segment(provider)}/redirect`,
   ssoCallback: (provider: string) => `${prefix}/auth/${segment(provider)}/callback`,
   ssoConfirm: (authenticator?: string) => `${prefix}/confirm/sso/redirect${authenticator ? `?authenticator=${encodeURIComponent(authenticator)}` : ''}`,
+  impersonate: (user: string) => `${prefix}/impersonate/${segment(user)}`,
+  stopImpersonating: () => `${prefix}/impersonate`,
 }
 
 /**

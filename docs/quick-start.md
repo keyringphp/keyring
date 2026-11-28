@@ -180,6 +180,7 @@ use Keyring\Features;
     // Features::devices(),
     // Features::emailChanges(),
     Features::securityLog(),
+    // Features::impersonation(),
 ],
 ```
 
@@ -193,6 +194,7 @@ use Keyring\Features;
 | `devices()` | A device cookie, "trust this device", a list of where users are signed in, and "this wasn't me" links. | [Devices & Sessions](devices-and-sessions.md) |
 | `emailChanges()` | Email changes that are confirmed by the new address and may be undone from the old one. Changing the email anywhere else will then throw an exception. | [Protected Changes](protected-changes.md#changing-the-email-address) |
 | `securityLog()` | A log of sign ins, failures, refusals, and changes in the `keyring_events` table, along with "was this you?" alerts. It's enabled unless you remove it, in which case the events are written to your application's log instead. | [Security Log & Emails](security-log-and-emails.md) |
+| `impersonation()` | `POST /impersonate/{user}` and `/impersonate` to stop, for signing in as another user and coming back. Nobody may until you register `Keyring::allowImpersonationWhen()`. | [Impersonation](impersonation.md) |
 
 A few more things live outside the features list:
 

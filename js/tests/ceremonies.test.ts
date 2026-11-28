@@ -2,6 +2,7 @@ import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
 import { enroll, frozenChanges, makeDefault, proveWithKey, removeAuthenticator, renameAuthenticator } from '../src/enroll'
 import { KeyringRequestError } from '../src/http'
 import { endOtherSessions, endSession, listSessions } from '../src/sessions'
+import { impersonate, stopImpersonating } from '../src/impersonation'
 import { createCredential, fromBase64Url, getCredential, toBase64Url } from '../src/webauthn'
 import { standIn } from './browser'
 
@@ -304,7 +305,7 @@ describe('enrolling', () => {
 
 describe('sessions', () => {
   test('lists the sessions the server returns', async () => {
-    const session = { id: '9f2c', name: 'Firefox on Windows', ip: '203.0.113.7', device: null, remembered: false, signedInAt: 'a', lastActiveAt: 'b', expiresAt: 'c', current: true }
+    const session = { id: '9f2c', name: 'Firefox on Windows', ip: '203.0.113.7', device: null, remembered: false, signedInAt: 'a', lastActiveAt: 'b', expiresAt: 'c', current: true, impersonated: true, impersonator: { name: 'Ada Admin' } }
     answers.push({ status: 200, body: { sessions: [session] } })
 
     expect(await listSessions()).toEqual([session])
@@ -334,6 +335,43 @@ describe('sessions', () => {
 
     expect((await endSession('nope').catch(error => error)).status).toBe(404)
     expect((await endOtherSessions().catch(error => error)).data.redirect).toBe('/confirm')
+  })
+})
+
+describe('impersonation', () => {
+  test('starts by the user\'s id, and stops', async () => {
+    answers.push({ status: 200, body: { status: 'impersonation-started', redirect: '/dashboard' } }, { status: 200, body: { status: 'impersonation-ended', redirect: '/dashboard' } })
+
+    expect(await impersonate(42)).toEqual({ status: 'impersonation-started', redirect: '/dashboard' })
+    expect(await stopImpersonating()).toEqual({ status: 'impersonation-ended', redirect: '/dashboard' })
+
+    expect(requests.map(({ method, url }) => ({ method, url }))).toEqual([
+      { method: 'POST', url: '/impersonate/42' },
+      { method: 'DELETE', url: '/impersonate' },
+    ])
+  })
+
+  test('stops as asked when the impersonation had already ended by itself, or been stopped', async () => {
+    answers.push(
+      { status: 409, body: { status: 'impersonation-ended', message: 'You\'re back in your own account.', redirect: '/admin' } },
+      { status: 409, body: { status: 'not-impersonating', message: 'You\'re not signed in as someone else.', redirect: '/admin' } },
+      { status: 401, body: { status: 'signed-out', redirect: '/login' } },
+      { status: 409, body: { message: 'Something else' } },
+    )
+
+    expect(await stopImpersonating()).toEqual({ status: 'impersonation-ended', redirect: '/admin' })
+    expect(await stopImpersonating()).toEqual({ status: 'not-impersonating', redirect: '/admin' })
+    expect((await stopImpersonating().catch(error => error)).status).toBe(401)
+    expect((await stopImpersonating().catch(error => error)).status).toBe(409)
+  })
+
+  test('throws when it\'s refused, or needs a fresh second factor', async () => {
+    answers.push({ status: 403, body: { status: 'impersonation-refused', message: 'You can\'t sign in as that user.' } }, { status: 423, body: { message: 'Confirm first', redirect: '/confirm' } })
+
+    const refused = await impersonate('7').catch(error => error)
+    expect(refused.status).toBe(403)
+    expect(refused.data.status).toBe('impersonation-refused')
+    expect((await impersonate('7').catch(error => error)).data.redirect).toBe('/confirm')
   })
 })
 

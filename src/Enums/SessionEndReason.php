@@ -73,4 +73,11 @@ enum SessionEndReason: string
 
     /** The app no longer lets the user sign in (Keyring::allowSignInWhen). */
     case NotAllowed = 'not_allowed';
+
+    /**
+     * An impersonation ended: the session someone was signed in to as the
+     * user, and their own parked one when the browser was signed out rather
+     * than going back to it.
+     */
+    case ImpersonationEnded = 'impersonation_ended';
 }

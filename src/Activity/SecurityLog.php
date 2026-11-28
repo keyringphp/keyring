@@ -19,6 +19,7 @@ use Illuminate\Support\Str;
 use Keyring\Devices\UserAgent;
 use Keyring\Enums\Severity;
 use Keyring\Features;
+use Keyring\Impersonation\Impersonation;
 use Keyring\KeyringManager;
 use Keyring\Models\SecurityEvent;
 use Keyring\Support\Collation;
@@ -49,7 +50,8 @@ class SecurityLog
         'password_changed', 'password_reset', 'protection_bypassed', 'clone_suspected', 'risk_step_up',
         'risk_reauthenticate', 'risk_notified', 'risk_password_change', 'risk_denied', 'risk_locked',
         'risk_revoked_sessions', 'access_refused', 'enrollment_refused', 'authenticator_removal_refused',
-        'link_refused', 'verification_refused', 'refusals_limited',
+        'link_refused', 'verification_refused', 'refusals_limited', 'impersonation_started', 'impersonation_ended',
+        'impersonation_refused',
     ];
 
     public function __construct(
@@ -152,7 +154,10 @@ class SecurityLog
 
     /**
      * The types activity() leaves out, from "security_log.unlisted", for an
-     * app's own activity query too. It's read while a page is built, so
+     * app's own activity query too. Plus the impersonation types when
+     * "impersonation.show_in_activity" is false: the one way to leave out
+     * any of Keyring's, and the app's alone to take, since a package that
+     * could would hide an impersonation from the user it was of. It's read while a page is built, so
      * anything but an array, from a config cached before the option existed
      * say, leaves out nothing rather than breaking the page. An entry that
      * isn't a string is passed over, since a null would leave out every
@@ -169,14 +174,15 @@ class SecurityLog
     public function unlistedActivityTypes(): array
     {
         $types = config('keyring.security_log.unlisted');
+        $impersonation = config('keyring.impersonation.show_in_activity') === false ? ['impersonation_started', 'impersonation_ended'] : [];
 
         if (! is_array($types)) {
-            return [];
+            return $impersonation;
         }
 
         $keyrings = array_map(Collation::fold(...), self::TYPES);
 
-        return array_values(array_filter($types, fn (mixed $type) => is_string($type) && ! in_array(Collation::fold($type), $keyrings, true)));
+        return [...array_values(array_filter($types, fn (mixed $type) => is_string($type) && ! in_array(Collation::fold($type), $keyrings, true))), ...$impersonation];
     }
 
     /**
@@ -267,6 +273,8 @@ class SecurityLog
      */
     protected function entry(string $type, ?Authenticatable $user, ?string $factor, ?string $device, array $meta, ?Severity $severity): SecurityEvent
     {
+        $impersonated = $user !== null && $this->aboutImpersonated($type, $user, $meta);
+
         $event = new ($this->keyring->securityEventModel())([
             'type' => $type,
             'severity' => $severity ?? Severity::of($type),
@@ -274,8 +282,8 @@ class SecurityLog
             // column, and the entry is still kept.
             'factor' => $factor === null ? null : mb_substr($factor, 0, 64),
             'device_id' => $device,
-            'ip' => $this->keyring->recordedIp(request()),
-            'user_agent' => UserAgent::from(request()),
+            'ip' => $impersonated ? null : $this->keyring->recordedIp(request()),
+            'user_agent' => $impersonated ? null : UserAgent::from(request()),
             'request_id' => $this->requestId(),
             'meta' => $meta === [] ? null : $this->scrubbed($meta),
             'created_at' => now(),
@@ -286,6 +294,25 @@ class SecurityLog
         }
 
         return $event;
+    }
+
+    /**
+     * Whether an entry on $user's account is written while someone is
+     * impersonating them, or is the start or end of that: the request is
+     * then the impersonator's, so its IP address and browser are theirs,
+     * and are left off, as off the user's sessions list. The start and end
+     * say so with their "role", the start being logged before the browser
+     * changes hands. The impersonator's own entries keep them.
+     *
+     * @param  array<string, mixed>  $meta
+     */
+    protected function aboutImpersonated(string $type, Authenticatable $user, array $meta): bool
+    {
+        if (in_array($type, ['impersonation_started', 'impersonation_ended'], true)) {
+            return ($meta['role'] ?? null) === 'impersonated';
+        }
+
+        return Features::enabled(Features::impersonation()) && app(Impersonation::class)->impersonates(request(), $user);
     }
 
     /**

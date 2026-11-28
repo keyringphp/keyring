@@ -1417,6 +1417,8 @@ describe('the sessions a user can see and end', function () {
                 'lastActiveAt' => now()->toIso8601String(),
                 'expiresAt' => now()->addDays(30)->toIso8601String(),
                 'current' => true,
+                'impersonated' => false,
+                'impersonator' => null,
             ])
             ->assertJsonPath('sessions.1', [
                 'id' => app(Sessions::class)->handle($other),
@@ -1428,6 +1430,8 @@ describe('the sessions a user can see and end', function () {
                 'lastActiveAt' => now()->subMinutes(5)->toIso8601String(),
                 'expiresAt' => now()->addHour()->toIso8601String(),
                 'current' => false,
+                'impersonated' => false,
+                'impersonator' => null,
             ]);
     })->with('registries')->with([
         'with devices' => [Features::all()],

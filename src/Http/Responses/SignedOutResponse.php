@@ -13,7 +13,10 @@ class SignedOutResponse implements SignedOutResponseContract
     use ChoosesFormat;
 
     /**
-     * @param  'revoked'|'expired'|'idle'|'other_user'|'reused'|'risk'|'not_allowed'  $reason
+     * The last two are an impersonation's (ImpersonationEndReason) that had
+     * nothing to go back to.
+     *
+     * @param  'revoked'|'expired'|'idle'|'other_user'|'reused'|'risk'|'not_allowed'|'impersonator_session_ended'|'lost'  $reason
      */
     public function __construct(
         public readonly string $reason,

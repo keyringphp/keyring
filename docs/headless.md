@@ -279,6 +279,10 @@ Keyring's answers carry a `redirect`, a URL on Laravel or one from your config. 
 | `401` `{"message": "Unauthenticated."}`, Laravel's own answer to a guest on a signed-in route | | |
 | `403` `enroll-first` | | `enrollment_url` |
 | `403` `change-password` | | `password_change_url` |
+| `403` `impersonation-refused`, a start of an [impersonation](impersonation.md#starting) that was refused, the same whatever the reason | | |
+| `403` `impersonating`, refused while [impersonating](impersonation.md#whats-refused-while-impersonating) the user | | |
+| `409` `not-impersonating`, a stop with nobody being impersonated, such as a second one from another tab. Back already | | `impersonation.return_url`. Load it in full. |
+| `409` `impersonation-ended`, an impersonation that [ended by itself](impersonation.md#the-time-limit) and went back to the impersonator | | `impersonation.return_url`. Load it in full. |
 | `422` with `page`, a sign in or step-up that ran out or used up its guesses | `login` or `confirm` | That page. The reason is in `errors`, on the username field or the factor's. |
 | `422` with `frozen`, a removal, rename or replacement while sign-in methods are [frozen](authenticators.md#frozen-sign-in-methods) | | Stay. `frozen.skip` says whether a key can make the change now, with `proof` sent through `POST /auth/user/authenticators/{factor}/proof-options` first. For an enrollment, the proof goes with `POST /auth/user/authenticators/{factor}`, which begins it, and a refused confirm means beginning again. See [Making a Change With an Established Key](authenticators.md#making-a-change-with-an-established-key). |
 | `422` with `errors.password`, beginning to add a second factor | | Stay. Ask for the current password and begin again with it as `password`. An account with no [established](authenticators.md#established-authenticators) second factor needs it. See [The Password for a First Second Factor](authenticators.md#the-password-for-a-first-second-factor). |

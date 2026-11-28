@@ -10,6 +10,7 @@ use Illuminate\Http\Request;
 use Illuminate\Routing\Route;
 use Illuminate\Routing\Router;
 use Illuminate\Support\Uri;
+use Keyring\Impersonation\Impersonation;
 use Keyring\KeyringManager;
 use Keyring\Login\Requirement;
 use Keyring\Login\StepUp;
@@ -21,6 +22,7 @@ use Symfony\Component\HttpFoundation\Response;
  * then add a second factor. Recovery codes don't count, and an emailed code
  * isn't a factor. Users who haven't are sent to keyring.enrollment_url. Guests
  * are let through, so it can sit in the web group and leave them to auth.
+ * So is a browser impersonating someone: it can't add anything for them.
  */
 class RequireEnrollment
 {
@@ -44,7 +46,7 @@ class RequireEnrollment
 
         $user = $this->keyring->guard()->user();
 
-        if (! $user instanceof Model || $this->isExcepted($request, $url) || $this->keyring->for($user)->withoutFallbacks()->canMeet($requirement)) {
+        if (! $user instanceof Model || $this->isExcepted($request, $url) || app(Impersonation::class)->active($request) || $this->keyring->for($user)->withoutFallbacks()->canMeet($requirement)) {
             return $next($request);
         }
 

@@ -431,7 +431,7 @@ it('reads a GitLab sign in, and keeps no address without the email scope', funct
     $gitlab = new FakeIdentityProvider('https://gitlab.com', algorithm: 'RS256')
         ->withDiscovery(['claims_supported' => ['iss', 'sub', 'aud', 'exp', 'iat', 'name', 'email', 'email_verified']])
         ->register('gitlab', ['name' => 'GitLab', 'scopes' => ['openid', 'profile']]);
-    $gitlab->signedInAt(now()->subMinutes(3))->signIn(['sub' => '1234567', 'email' => null, 'email_verified' => null, 'nickname' => 'taylor']);
+    $gitlab->signedInAt($signedInAt = now()->subMinutes(3))->signIn(['sub' => '1234567', 'email' => null, 'email_verified' => null, 'nickname' => 'taylor']);
 
     $url = ssoStart('gitlab');
     expect(authorizationQuery($url))->not->toHaveKey('claims')
@@ -439,7 +439,7 @@ it('reads a GitLab sign in, and keeps no address without the email scope', funct
 
     $identity = ssoComplete($gitlab->approve($url), 'gitlab');
 
-    expect($identity->authTime)->toBe(now()->subMinutes(3)->getTimestamp())
+    expect($identity->authTime)->toBe($signedInAt->getTimestamp())
         ->and($identity->email)->toBeNull()
         ->and($identity->emailVerified)->toBeFalse();
 

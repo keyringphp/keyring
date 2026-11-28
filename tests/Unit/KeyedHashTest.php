@@ -26,8 +26,8 @@ function keyedHashPurposes(): array
 it('never gives two purposes the same hash for the same value', function (string $value) {
     $hashes = array_map(fn (string $purpose) => KeyedHash::make($purpose, $value), keyedHashPurposes());
 
-    expect(keyedHashPurposes())->toHaveCount(5)
-        ->and(array_unique($hashes))->toHaveCount(5);
+    expect(keyedHashPurposes())->toHaveCount(6)
+        ->and(array_unique($hashes))->toHaveCount(6);
 })->with(['taylor@example.com', '1', '', 'abcd-efgh-ijkl-mnop-qrst-uvwx-yz']);
 
 it('never hashes with the app key itself', function (string $purpose) {

@@ -25,7 +25,7 @@ use function Laravel\Prompts\multiselect;
 #[Description('Install Keyring: pick sign-in methods and features, then publish the config, migrations, a provider and your actions')]
 #[Signature('keyring:install
         {--factor=* : A sign-in method to add besides the password: totp, passkeys, security-keys or email-codes. Without one, or with none, users sign in with the password alone}
-        {--feature=* : A feature to turn on, replacing the defaults (registration, reset-passwords, email-verification, update-passwords and security-log): registration, reset-passwords, email-verification, update-passwords, manage-authenticators, devices, email-changes or security-log}
+        {--feature=* : A feature to turn on, replacing the defaults (registration, reset-passwords, email-verification, update-passwords and security-log): registration, reset-passwords, email-verification, update-passwords, manage-authenticators, devices, email-changes, security-log or impersonation}
         {--require-second-factor : Make every user set up a second factor (the default once you add an authenticator app, passkeys or security keys)}
         {--optional-second-factor : Leave setting up a second factor to each user}
         {--force : Overwrite files that already exist}')]
@@ -273,6 +273,7 @@ class InstallCommand extends Command
                     Features::devices() => 'Devices: "trust this device" and where you\'re signed in',
                     Features::emailChanges() => 'Email changes, confirmed and undoable',
                     Features::securityLog() => 'Security log and "was this you?" alerts',
+                    Features::impersonation() => 'Impersonation: signing in as another user, once you say who may',
                 ],
                 default: [...self::FEATURES, ...$factors === [] ? [] : [Features::manageAuthenticators()]],
                 scroll: 8,

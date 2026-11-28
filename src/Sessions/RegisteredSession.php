@@ -24,6 +24,11 @@ use Keyring\Enums\Assurance;
  * A remembered session is one "remember me" may bring back once Laravel's
  * own session has gone, so it's allowed to sit unused for longer.
  *
+ * An impersonated session is one someone else is signed in to as this user
+ * (Impersonation): it names who (impersonatorId, impersonatorType) and the
+ * record of their own session, parked meanwhile (impersonatorSession).
+ * That's a registry ID too, so it never leaves the server either.
+ *
  * Whose it is takes more than the ID: two user models can have the same
  * IDs. userType says which table the ID is one of. It's the table and not
  * the class, so one account loaded as two classes (an Admin that extends
@@ -48,6 +53,9 @@ final readonly class RegisteredSession
         public ?int $replacedAt = null,
         public bool $remembered = false,
         public ?string $origin = null,
+        public ?string $impersonatorId = null,
+        public ?string $impersonatorType = null,
+        public ?string $impersonatorSession = null,
     ) {}
 
     /**
@@ -78,6 +86,14 @@ final readonly class RegisteredSession
         return $user instanceof Model ? $user->getConnection()->getName().':'.$user->getTable() : $user::class;
     }
 
+    /**
+     * Whether someone else is signed in to this session as its user.
+     */
+    public function isImpersonated(): bool
+    {
+        return $this->impersonatorId !== null;
+    }
+
     public function isActive(int $now): bool
     {
         return $this->revokedAt === null && $this->replacedBy === null && $this->expiresAt > $now;
@@ -94,14 +110,15 @@ final readonly class RegisteredSession
 
     /**
      * The record with every registry ID blanked: its own, the one it moved
-     * to and the one it started on. Each is, or was, the value of a "remember
-     * me" cookie, so this is what goes anywhere off the server, such as a
-     * queued event. A handle can't be worked out from what's left.
+     * to, the one it started on, and an impersonator's own. Each is, or was,
+     * the value of a "remember me" cookie, so this is what goes anywhere off
+     * the server, such as a queued event. A handle can't be worked out from
+     * what's left.
      */
     #[\NoDiscard]
     public function withoutIds(): self
     {
-        return $this->with(['id' => '', 'replacedBy' => null, 'origin' => null]);
+        return $this->with(['id' => '', 'replacedBy' => null, 'origin' => null, 'impersonatorSession' => null]);
     }
 
     /**
@@ -126,6 +143,9 @@ final readonly class RegisteredSession
             'replaced_at' => $this->replacedAt,
             'remembered' => $this->remembered,
             'origin' => $this->origin,
+            'impersonator_id' => $this->impersonatorId,
+            'impersonator_type' => $this->impersonatorType,
+            'impersonator_session' => $this->impersonatorSession,
         ];
     }
 
@@ -164,6 +184,9 @@ final readonly class RegisteredSession
             replacedAt: isset($data['replaced_at']) ? (int) $data['replaced_at'] : null,
             remembered: (bool) ($data['remembered'] ?? false),
             origin: $data['origin'] ?? null,
+            impersonatorId: isset($data['impersonator_id']) ? (string) $data['impersonator_id'] : null,
+            impersonatorType: $data['impersonator_type'] ?? null,
+            impersonatorSession: $data['impersonator_session'] ?? null,
         );
     }
 }

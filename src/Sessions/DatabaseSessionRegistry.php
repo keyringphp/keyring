@@ -14,11 +14,15 @@ use Illuminate\Support\Collection;
 use Keyring\Contracts\SessionRegistry;
 use Keyring\Enums\SessionEndReason;
 use Keyring\Support\WithoutBindings;
+use LogicException;
 
 class DatabaseSessionRegistry implements SessionRegistry, SweepsSessions
 {
     /** The columns the sweep needs, from their own migration. */
     public const array SWEEP_COLUMNS = ['announced_at', 'end_reason', 'announce_attempts', 'announce_after'];
+
+    /** The columns an impersonated session needs, from their own migration. */
+    public const array IMPERSONATION_COLUMNS = ['impersonator_id', 'impersonator_type', 'impersonator_session'];
 
     /** What end_reason says for a record everyone was signed out of: EveryoneSignedOut announces it, not one of its own. */
     public const string EVERYONE = 'everyone_signed_out';
@@ -28,6 +32,9 @@ class DatabaseSessionRegistry implements SessionRegistry, SweepsSessions
 
     /** Whether the sweep's notes are kept, once found to be (notes). */
     protected ?bool $notes = null;
+
+    /** Whether the impersonation columns are there, once found to be (canImpersonate). */
+    protected bool $impersonates = false;
 
     public function __construct(
         protected ConnectionInterface $connection,
@@ -46,6 +53,19 @@ class DatabaseSessionRegistry implements SessionRegistry, SweepsSessions
         // waiting for the migration that adds it.
         if ($row['origin'] === null) {
             unset($row['origin']);
+        }
+
+        // The same for the impersonation columns, which only an
+        // impersonated session fills, so an app that never impersonates
+        // anyone needs no migration for them.
+        if ($row['impersonator_id'] === null) {
+            unset($row['impersonator_id'], $row['impersonator_type'], $row['impersonator_session']);
+        } elseif (! $this->canImpersonate()) {
+            throw new LogicException(sprintf(
+                'The [%s] table is missing the columns Keyring keeps an impersonation in (%s). Publish and run Keyring\'s migrations: php artisan keyring:install, then php artisan migrate.',
+                $this->table,
+                implode(', ', self::IMPERSONATION_COLUMNS),
+            ));
         }
 
         $this->withoutBindings(fn () => $this->query()->upsert([$row], ['id'], array_values(array_diff(array_keys($row), ['id', 'revoked_at', 'replaced_by', 'replaced_at']))));
@@ -275,6 +295,37 @@ class DatabaseSessionRegistry implements SessionRegistry, SweepsSessions
     {
         return $this->connection instanceof Connection
             && $this->connection->getSchemaBuilder()->hasColumns($this->table, self::SWEEP_COLUMNS);
+    }
+
+    /**
+     * Whether the table has the impersonation columns, asked before the
+     * first impersonated session is saved, so a missing migration says so
+     * rather than failing on the insert. A yes is kept for the process, and
+     * in the cache for every process for a few minutes
+     * (Sweep::SCHEMA_CACHED_FOR), so starting makes no schema query after
+     * the first. A no isn't kept: the next start asks again, and works as
+     * soon as the migration has run.
+     */
+    protected function canImpersonate(): bool
+    {
+        if ($this->impersonates) {
+            return true;
+        }
+
+        $key = 'keyring:sessions:impersonatable:'.sha1($this->connection->getDatabaseName().'|'.($this->connection instanceof Connection ? $this->connection->getTablePrefix() : '').$this->table);
+
+        if ($this->contained(fn () => cache()->get($key), null) === true) {
+            return $this->impersonates = true;
+        }
+
+        $can = $this->connection instanceof Connection
+            && $this->connection->getSchemaBuilder()->hasColumns($this->table, self::IMPERSONATION_COLUMNS);
+
+        if ($can) {
+            $this->contained(fn () => cache()->put($key, true, Sweep::SCHEMA_CACHED_FOR), null);
+        }
+
+        return $this->impersonates = $can;
     }
 
     /**

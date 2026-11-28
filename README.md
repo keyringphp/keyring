@@ -30,6 +30,7 @@ Every way a user can prove who they are is a **factor**. Users may hold as many 
 - **Devices and sessions.** A list of each user's sessions and "sign out everywhere else" on any session driver, plus trusted devices and new device emails. [Devices & Sessions](docs/devices-and-sessions.md)
 - **Step-up authentication.** The `keyring:aal2` and `keyring.fresh:15m` middleware accept a passkey or code, not just a password. [Step-Up](docs/step-up.md)
 - **Protected account changes.** Email changes are confirmed from both addresses and may be undone. [Protected Changes](docs/protected-changes.md)
+- **Impersonation.** Support staff sign in as a user and come back, only once you say who may, behind a fresh second factor, with a time limit, Keyring's security changes refused meanwhile, and both accounts' security logs saying who did it. [Impersonation](docs/impersonation.md)
 - **Risk signals.** New devices, new countries, impossible travel, session cookies reused in another browser, and breached passwords. [Risk](docs/risk.md)
 - **A security log and security emails.** Sent from day one, and each one may be replaced, restyled, or turned off. [Security Log & Emails](docs/security-log-and-emails.md)
 - **Built on OWASP ASVS 5.0.0 and NIST SP 800-63B-4.** Every requirement is mapped on [one page](docs/owasp-asvs.md).
@@ -81,6 +82,7 @@ Everything else is already in your application, commented out. To enable a featu
 | A second factor for everyone | The `keyring.enrolled` line in your provider |
 | Trusted devices, a list of where each user is signed in, and new device emails | `Features::devices()` |
 | Confirmed, undoable email changes | `Features::emailChanges()` |
+| Impersonating users, for support | `Features::impersonation()`, and the `Keyring::allowImpersonationWhen` line in your provider |
 | More risk signals | Their lines in `Keyring::risk()->signals([...])` |
 
 The [Adding Features](docs/quick-start.md#adding-features) documentation covers the pages each one needs.
@@ -89,7 +91,7 @@ The [Adding Features](docs/quick-start.md#adding-features) documentation covers 
 
 - **Getting Started:** [Quick Start](docs/quick-start.md) · [Installation](docs/installation.md) · [Configuration](docs/configuration.md) · [Upgrading From Fortify](docs/upgrading-from-fortify.md)
 - **Signing In:** [Factors](docs/factors.md) · [Policies](docs/policies.md) · [The Sign In Flow](docs/sign-in-flow.md) · [Step-Up](docs/step-up.md) · [Passkeys & Security Keys](docs/passkeys.md) · [Single Sign-On](docs/sso.md) · [More Identity Providers](docs/sso-providers.md)
-- **Account Security:** [Managing Authenticators](docs/authenticators.md) · [Devices & Sessions](docs/devices-and-sessions.md) · [Protected Changes](docs/protected-changes.md) · [Risk](docs/risk.md) · [Security Log & Emails](docs/security-log-and-emails.md) · [Events](docs/events.md)
+- **Account Security:** [Managing Authenticators](docs/authenticators.md) · [Devices & Sessions](docs/devices-and-sessions.md) · [Protected Changes](docs/protected-changes.md) · [Impersonation](docs/impersonation.md) · [Risk](docs/risk.md) · [Security Log & Emails](docs/security-log-and-emails.md) · [Events](docs/events.md)
 - **Building Your Application:** [Frontend](docs/frontend.md) · [Headless Frontends](docs/headless.md) · [Extending Keyring](docs/extending.md) · [Recipes](docs/recipes.md) · [Testing](docs/testing.md) · [Example Application](https://github.com/keyringphp/example)
 - **Security:** [Security](docs/security.md) · [OWASP ASVS and NIST SP 800-63B](docs/owasp-asvs.md)
 

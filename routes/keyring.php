@@ -10,6 +10,7 @@ use Keyring\Http\Controllers\ChallengeController;
 use Keyring\Http\Controllers\DeviceController;
 use Keyring\Http\Controllers\EmailChangeController;
 use Keyring\Http\Controllers\EmailVerificationController;
+use Keyring\Http\Controllers\ImpersonationController;
 use Keyring\Http\Controllers\PasswordController;
 use Keyring\Http\Controllers\PasswordResetController;
 use Keyring\Http\Controllers\RegisteredUserController;
@@ -75,19 +76,21 @@ Route::middleware('guest:'.$guard)->group(function () use ($challenge, $sso) {
 });
 
 Route::middleware('auth:'.$guard)->group(function () use ($challenge, $sso) {
-    Route::prefix('/confirm')->name('keyring.confirm.')->group($challenge);
+    // A browser impersonating someone can't prove anything as them, nor
+    // change how they sign in (keyring.not-impersonating).
+    Route::prefix('/confirm')->middleware('keyring.not-impersonating')->name('keyring.confirm.')->group($challenge);
 
     // Confirm a step-up by signing in again at the provider of a link the
     // confirm page offers. Its callback is the one signing in uses.
     if ($sso) {
         Route::get('/confirm/sso/redirect', [SingleSignOnController::class, 'reauthenticate'])
-            ->middleware('throttle:keyring-login-options')
+            ->middleware(['keyring.not-impersonating', 'throttle:keyring-login-options'])
             ->block()
             ->name('keyring.sso.confirm');
     }
 
     // Changing how someone signs in needs a recent verification.
-    Route::middleware(config('keyring.changes_middleware'))->group(function () {
+    Route::middleware('keyring.not-impersonating')->middleware(config('keyring.changes_middleware'))->group(function () {
         if (Features::enabled(Features::manageAuthenticators())) {
             Route::prefix('/user/authenticators')->name('keyring.authenticators.')->group(function () {
                 Route::post('/{factor}', [AuthenticatorController::class, 'store'])->block()->name('store');
@@ -126,16 +129,30 @@ Route::middleware('auth:'.$guard)->group(function () use ($challenge, $sso) {
 
     if (Features::enabled(Features::emailChanges())) {
         Route::get('/user/email', [EmailChangeController::class, 'show'])->name('keyring.email.show');
-        Route::delete('/user/email', [EmailChangeController::class, 'destroy'])->name('keyring.email.destroy');
+        Route::delete('/user/email', [EmailChangeController::class, 'destroy'])->middleware('keyring.not-impersonating')->name('keyring.email.destroy');
     }
 
     // The verification link is an emailed link like the ones below: its GET
     // shows a page, and the page's button posts the link's signature. The
     // GET is further down, since the link is often opened signed out.
+    // Following it, and sending another, are the user's to do, so both are
+    // refused while impersonating.
     if (Features::enabled(Features::emailVerification())) {
         Route::get('/email/verify', [EmailVerificationController::class, 'notice'])->name('verification.notice');
-        Route::post('/email/verify/{id}/{hash}', [EmailVerificationController::class, 'verify'])->middleware([ValidatePostedSignature::class, 'throttle:keyring'])->name('verification.verify.store');
-        Route::post('/email/verification-notification', [EmailVerificationController::class, 'send'])->middleware('throttle:keyring')->name('verification.send');
+        Route::post('/email/verify/{id}/{hash}', [EmailVerificationController::class, 'verify'])->middleware(['keyring.not-impersonating', ValidatePostedSignature::class, 'throttle:keyring'])->name('verification.verify.store');
+        Route::post('/email/verification-notification', [EmailVerificationController::class, 'send'])->middleware(['keyring.not-impersonating', 'throttle:keyring'])->name('verification.send');
+    }
+
+    // Signing in as another user takes what impersonation.middleware asks,
+    // by default two factors proved in the last 15 minutes, and isn't
+    // offered to a browser that's impersonating already. Stopping is for
+    // anyone who is.
+    if (Features::enabled(Features::impersonation())) {
+        Route::post('/impersonate/{user}', [ImpersonationController::class, 'store'])
+            ->middleware(['keyring.not-impersonating', ...(array) config('keyring.impersonation.middleware'), 'throttle:keyring'])
+            ->block()
+            ->name('keyring.impersonation.store');
+        Route::match(['POST', 'DELETE'], '/impersonate', [ImpersonationController::class, 'destroy'])->block()->name('keyring.impersonation.destroy');
     }
 
     Route::post('/logout', [AuthenticatedSessionController::class, 'destroy'])->name('logout');

@@ -32,6 +32,8 @@ Keyring records sign ins, failures, lockouts, refusals, changes, and automatic a
 
 The log never holds passwords, codes, tokens, signatures, session IDs, or anything else from the request body.
 
+While someone is [impersonating](impersonation.md#security-log-and-events) a user, the requests are the impersonator's. So any entry written on the user's account in those requests has no IP address or user agent, and neither do the `impersonation_started` and `impersonation_ended` entries on the user's account. The impersonator's own entries keep them.
+
 The security log is turned on by default. The `Features::securityLog()` feature is part of Keyring's default features, and the `keyring:install` command includes it in your list unless you leave it out. You can configure the log with these options:
 
 ```php
@@ -102,6 +104,9 @@ How long those lines are kept, and who can read them, is up to that channel. The
 | `link_refused` | warning | An emailed link was refused. It's linked to the user whose email change it was, when there is one. | `link` and `reason`, [below](#refused-links) |
 | `verification_refused` | critical | A sign in or step-up was refused at the end, because a [mandatory step](sign-in-flow.md#mandatory-steps) hadn't run for the request. | `skipped`, the steps |
 | `refusals_limited` | warning | The entries above this one stopped being written for a while. See [Refusals That Repeat](#refusals-that-repeat). | `type`, the entry type that was left out |
+| `impersonation_started` | notice | Someone signed in as another user. It's logged on both accounts, with no IP address or user agent on the user's. See [Impersonation](impersonation.md#security-log-and-events). | `impersonator` and `user` (the two accounts' IDs), `role` (`impersonator` or `impersonated`, for the entry's account) |
+| `impersonation_ended` | info | An impersonation ended. It's logged on both accounts, or on the other's alone once one of them has been deleted, with no IP address or user agent on the user's. | `impersonator`, `user`, `role`, `reason` (`stopped`, `expired`, `revoked`, `impersonator_session_ended`, `lost`, `signed_out` or `failed`), `returned` (whether the browser went back to the impersonator's session, or stayed theirs for `failed`) |
+| `impersonation_refused` | warning | A start of an [impersonation](impersonation.md#security-log-and-events) was refused. It's logged on the impersonator's account. | `reason` (an [`ImpersonationRefusal`](impersonation.md#from-your-own-code) value: `disabled`, `no_callback`, `self`, `not_allowed`, `impersonating`, `unregistered`, or `not_found` for an ID nobody has, which gets the same `403` as `not_allowed`), `user` (the ID asked for, cut to 64 characters) |
 
 A wrong password for an unknown account is logged as `factor_failed`, with no user.
 
@@ -161,7 +166,7 @@ An entry written to [your application's log](#without-the-table) carries its tim
 Anyone who is refused can ask again as often as they like, and entries are kept for months. To keep a refusal from filling the table one request at a time, Keyring limits how often refusals are written:
 
 - **A lock is logged when it starts.** `locked_out` is written once per factor and IP address, and not again until the wait that the lock imposed is over. Every request it refuses in the meantime still dispatches the `Lockout` event (and Laravel's own `Lockout` event), so your listeners see each one. `rate_limited` works the same way for the form limiter. It's written once per route, for the account or IP address being refused, until that limiter has room again. The `RateLimited` event is dispatched for every refused request.
-- **Refusals are counted.** `locked_out`, `rate_limited`, `access_refused`, `enrollment_refused`, `authenticator_removal_refused`, `link_refused`, `verification_refused`, and `factor_failed` for a name nobody has are each written at most `security_log.refusals` times every `refusals_per` period, which is 20 an hour by default. These counts are kept for the account the entry is linked to, or for the IP address when the entry isn't linked to anyone.
+- **Refusals are counted.** `locked_out`, `rate_limited`, `access_refused`, `enrollment_refused`, `authenticator_removal_refused`, `link_refused`, `verification_refused`, `impersonation_refused`, and `factor_failed` for a name nobody has are each written at most `security_log.refusals` times every `refusals_per` period, which is 20 an hour by default. These counts are kept for the account the entry is linked to, or for the IP address when the entry isn't linked to anyone.
 - **The log says where it stopped.** The first entry left out is replaced by one `refusals_limited` entry that names its type, so a gap in the log is never silent.
 
 A failed factor for a real account isn't counted this way. The account's own [rate limits](security.md#rate-limiting) already bound how often it can fail, and the `RepeatedFactorFailures` and `SuccessAfterFailures` risk signals count those entries. The `CredentialStuffing` signal also reads `factor_failed` for names nobody has. This limit counts by the request's real IP address, while the signal matches the address Keyring records, and `refusals => null` removes the limit. Either way, the signal counts all of those entries as one account, so the limit changes little for it. To write every refusal, set `refusals` to `null`. The counts are stored in the rate limiter's cache store, the same as the limits themselves.
@@ -216,13 +221,13 @@ config()->push('keyring.security_log.unlisted', 'acme.token_issued');
 
 Your app may add types from a service provider of its own too. Push them the same way: setting the option there replaces what packages have already pushed, since their providers boot first. In `config/keyring.php`, keep the option a list even for one type. A string there leaves nothing out, and the first package to push to it throws an error.
 
-Keyring's own [entry types](#entry-types) are never left out, even when they're listed, and that includes any spelling your database takes for one: on MySQL, Laravel's default collation takes `Signed_Out` or `signed_out ` for `signed_out`. A package adds its types where your app doesn't see them, and one of Keyring's there would hide the user's real sign ins or sign outs.
+Keyring's own [entry types](#entry-types) are never left out, even when they're listed, and that includes any spelling your database takes for one: on MySQL, Laravel's default collation takes `Signed_Out` or `signed_out ` for `signed_out`. A package adds its types where your app doesn't see them, and one of Keyring's there would hide the user's real sign ins or sign outs. The one exception is the impersonation entries, `impersonation_started` and `impersonation_ended`, which your app can leave out by setting [`impersonation.show_in_activity`](configuration.md#impersonation) to `false`, but not by listing them here.
 
 Unlisted entries are still the user's. They're deleted when the user is force deleted, and kept for `keep_for` like any other entry. Only `Keyring::activity` leaves them out:
 
 - ["Was this you?" alerts](#was-this-you-alerts) come from the `alerts` list alone. An unlisted type isn't an alert unless you add it there too.
 - A line written to [your application's log](#without-the-table) still names the user.
-- Your own queries on `SecurityEvent` still find them. If you build the activity page from a query of your own, add `->whereNotIn('type', Keyring::unlistedActivityTypes())` to it. That's the same list `Keyring::activity` uses, without Keyring's own types or anything that isn't a string. A `null` read straight from the config would hide every entry.
+- Your own queries on `SecurityEvent` still find them. If you build the activity page from a query of your own, add `->whereNotIn('type', Keyring::unlistedActivityTypes())` to it. That's the same list `Keyring::activity` uses, without Keyring's own types or anything that isn't a string, and with the impersonation types when `impersonation.show_in_activity` is `false`. A `null` read straight from the config would hide every entry.
 
 ### Pruning
 

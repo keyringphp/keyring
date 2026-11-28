@@ -16,10 +16,12 @@ use Keyring\Enums\Assurance;
 use Keyring\Events\RegisteredSessionEnded;
 use Keyring\Facades\Keyring;
 use Keyring\Factors\SingleSignOn;
+use Keyring\Impersonation\Impersonation;
 use Keyring\Models\Authenticator;
 use Keyring\Models\FailureCount;
 use Keyring\Models\PendingChange;
 use Keyring\Sessions\RegisteredSession;
+use Keyring\Sessions\SessionAssurance;
 use Keyring\Sessions\Sessions;
 use Keyring\Testing\VirtualAuthenticator;
 use Keyring\Tests\Fixtures\User;
@@ -365,6 +367,84 @@ it('signs out a session that moved to a new record while everyone was being sign
     expect($registry->find('resumed')->revokedAt)->not->toBeNull()
         ->and($registry->find('remembered')->revokedAt)->not->toBeNull()
         ->and($registry->forUser($user))->toBeEmpty();
+});
+
+// Stopping moves the admin's record as they come back, holding their
+// row, so a sign-out everywhere that overlaps it either ends the record it
+// moved to, or ends the one it moves from first, which it then can't move.
+it('leaves nothing of the admin signed in when they stop impersonating as they\'re signed out everywhere', function () {
+    $admin = taylor();
+    $user = User::create(['name' => 'Abigail', 'email' => 'abigail@example.com', 'password' => 'password']);
+    $now = now()->getTimestamp();
+    $registry = app(SessionRegistry::class);
+    $registry->save($own = new RegisteredSession('admins-own', (string) $admin->id, RegisteredSession::typeOf($admin), 'web', null, Assurance::AAL2, null, null, $now, $now, $now + 3600));
+    $impersonated = app(Sessions::class)->startImpersonation($user, $admin, $own, $now + 3600);
+
+    $browser = [
+        Sessions::KEY => $impersonated->id,
+        Impersonation::KEY => [
+            'impersonator' => (string) $admin->id,
+            'type' => RegisteredSession::typeOf($admin),
+            'name' => 'Taylor',
+            'session' => $own->id,
+            'handle' => app(Sessions::class)->handle($impersonated),
+            'user' => (string) $user->id,
+            'user_type' => RegisteredSession::typeOf($user),
+            'remembered' => false,
+            'started_at' => $now,
+            'expires_at' => $now + 3600,
+            'password' => Keyring::guard()->hashPasswordForCookie($admin->getAuthPassword()),
+            'parked' => [SessionAssurance::ACTIVE => $now],
+        ],
+    ];
+
+    $results = contend($admin, [['stop-impersonating', $user->id, json_encode($browser)], ['sign-out', $admin->id]]);
+
+    expect($results[0])->toBe('back')
+        ->and($registry->find($own->id)->revokedAt)->not->toBeNull()
+        ->and($registry->find($impersonated->id)->revokedAt)->not->toBeNull()
+        ->and($registry->forUser($admin))->toBeEmpty();
+});
+
+// Two of the browser's requests that find it over at once, XHRs sent as its
+// time ran out say, both revoke the impersonated record, which locks it,
+// then claim its end. Only the one that claims it goes back and logs the
+// end. The other leaves it, without signing the admin out of the record
+// the first moved to.
+it('ends an impersonation two requests end at once once, leaving the admin signed in', function () {
+    $admin = taylor();
+    $user = User::create(['name' => 'Abigail', 'email' => 'abigail@example.com', 'password' => 'password']);
+    $now = now()->getTimestamp();
+    $registry = app(SessionRegistry::class);
+    $registry->save($own = new RegisteredSession('admins-own', (string) $admin->id, RegisteredSession::typeOf($admin), 'web', null, Assurance::AAL2, null, null, $now, $now, $now + 3600));
+    $impersonated = app(Sessions::class)->startImpersonation($user, $admin, $own, $now + 3600);
+
+    $browser = json_encode([
+        Sessions::KEY => $impersonated->id,
+        Impersonation::KEY => [
+            'impersonator' => (string) $admin->id,
+            'type' => RegisteredSession::typeOf($admin),
+            'name' => 'Taylor',
+            'session' => $own->id,
+            'handle' => app(Sessions::class)->handle($impersonated),
+            'user' => (string) $user->id,
+            'user_type' => RegisteredSession::typeOf($user),
+            'remembered' => false,
+            'started_at' => $now,
+            'expires_at' => $now + 3600,
+            'password' => Keyring::guard()->hashPasswordForCookie($admin->getAuthPassword()),
+            'parked' => [SessionAssurance::ACTIVE => $now],
+        ],
+    ]);
+
+    $results = contend(sessionRow($impersonated->id), [['stop-impersonating', $user->id, $browser], ['stop-impersonating', $user->id, $browser]]);
+
+    expect(outcomes($results, 'back'))->toBe(1)
+        ->and(outcomes($results, 'signed out'))->toBe(1)
+        ->and(DB::table('keyring_events')->where('type', 'impersonation_ended')->count())->toBe(2)
+        ->and($registry->find($impersonated->id)->revokedAt)->not->toBeNull()
+        ->and($registry->find($registry->find($own->id)->replacedBy)->isActive(now()->getTimestamp()))->toBeTrue()
+        ->and($registry->forUser($admin))->toHaveCount(1);
 });
 
 // The record is read with a lock, so the second waits for the first, then

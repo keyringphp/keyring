@@ -13,6 +13,7 @@
 - [Account Changes and Enrollment](#account-changes-and-enrollment)
 - [Devices](#devices)
 - [Sessions](#sessions)
+- [Impersonation](#impersonation)
 - [Protected Attributes and Email Changes](#protected-attributes-and-email-changes)
 - [Passwords](#passwords)
 - [Risk](#risk)
@@ -64,6 +65,7 @@ use Keyring\Features;
     // Features::manageAuthenticators(),
     // Features::devices(),
     // Features::emailChanges(),
+    // Features::impersonation(),
 ],
 ```
 
@@ -166,7 +168,7 @@ The `algorithms` option lists the signature algorithms that keys may use, in ord
 'changes_middleware' => ['keyring.fresh:15m'],
 ```
 
-This is extra middleware for adding, renaming, and removing authenticators, ending sessions, revoking devices, changing the password, and starting an email change. It's applied on top of `auth:{guard}`, which every signed-in Keyring route already has, so don't add `auth` here. By default, these routes need a verification from the last 15 minutes, as [Step-Up](step-up.md#fresh-verification) explains.
+This is extra middleware for adding, renaming, and removing authenticators, ending sessions, revoking devices, changing the password, and starting an email change. It's applied on top of `auth:{guard}`, which every signed-in Keyring route already has, so don't add `auth` here. By default, these routes need a verification from the last 15 minutes, as [Step-Up](step-up.md#fresh-verification) explains. Whatever this says, they also refuse a browser that's [impersonating](impersonation.md#whats-refused-while-impersonating) the user.
 
 ```php
 'authenticator_changes' => [
@@ -288,6 +290,32 @@ The `locator` option is the class that works out a request's location. See [Devi
 
 See [Devices & Sessions](devices-and-sessions.md#the-session-registry).
 
+## Impersonation
+
+```php
+'impersonation' => [
+    'lifetime' => '1h',
+    'show_in_sessions' => true,
+    'show_in_activity' => true,
+    'middleware' => ['keyring:aal2', 'keyring.fresh:15m'],
+    'redirect_url' => null,
+    'return_url' => null,
+],
+```
+
+These only matter with `Features::impersonation()` on, and once [`Keyring::allowImpersonationWhen()`](impersonation.md#who-may-impersonate-whom) says who may.
+
+| Key | Meaning |
+|---|---|
+| `lifetime` | How long an impersonation lasts before it ends by itself and goes back to the impersonator. It's never longer than `sessions.absolute`. `null` is an hour. With the feature on, one that isn't a duration, or is `0`, throws an `InvalidArgumentException` naming the option when the app boots. See [The Time Limit](impersonation.md#the-time-limit). |
+| `show_in_sessions` | Whether the impersonated session is in the user's own [sessions list](impersonation.md#the-sessions-list), marked with who is in it, for the user to end. With `false` it's left out, except from the list the impersonated session itself asks for, but still ends with the rest of their sessions, and still counts in how many "sign out everywhere else" says it ended. |
+| `show_in_activity` | Whether `impersonation_started` and `impersonation_ended` are in [`Keyring::activity`](security-log-and-emails.md#showing-recent-activity), on both accounts. With `false` they're in `Keyring::unlistedActivityTypes()`, so it leaves them out, but they're still written. This is the only way to leave out any of Keyring's own types: listed in `security_log.unlisted`, they're still shown. It doesn't keep an impersonation secret either: what was done while impersonating, such as signing out, is still in the user's activity. See [The Security Log and Events](impersonation.md#security-log-and-events). |
+| `middleware` | What starting one takes, on top of being signed in and not impersonating already. By default, two factors proved in the last 15 minutes. An empty list asks for nothing more: any signed-in session the callback allows can start one, with no step-up. |
+| `redirect_url` | Where starting goes. `null` is `home`. |
+| `return_url` | Where stopping, or running out, goes. `null` is `home`. |
+
+See [Impersonation](impersonation.md).
+
 ## Protected Attributes and Email Changes
 
 ```php
@@ -372,7 +400,7 @@ The `levels` option sets the score thresholds. The `recent_change` option sets h
 'prune_at' => '03:00',
 ```
 
-The `keep_for` option sets how long entries are kept before the [`keyring:prune`](devices-and-sessions.md#pruning) command deletes them. The `alerts` option lists the entry types that are shown once, as ["was this you?" alerts](security-log-and-emails.md#was-this-you-alerts), at the next sign in. The `unlisted` option lists the entry types that `Keyring::activity` leaves out, for entries about a user that aren't something the user did. An entry that isn't a string is ignored, and so is one of Keyring's own entry types. See [Showing Recent Activity](security-log-and-emails.md#showing-recent-activity).
+The `keep_for` option sets how long entries are kept before the [`keyring:prune`](devices-and-sessions.md#pruning) command deletes them. The `alerts` option lists the entry types that are shown once, as ["was this you?" alerts](security-log-and-emails.md#was-this-you-alerts), at the next sign in. The `unlisted` option lists the entry types that `Keyring::activity` leaves out, for entries about a user that aren't something the user did. An entry that isn't a string is ignored, and so is one of Keyring's own entry types: to leave out the impersonation entries, set [`impersonation.show_in_activity`](#impersonation) to `false` instead. See [Showing Recent Activity](security-log-and-emails.md#showing-recent-activity).
 
 The table is turned on by `Features::securityLog()`, which is on by default. Without it, the same events are written to the log `channel` instead. `null` means your default channel. Without the table, "was this you?" alerts and the `RepeatedFactorFailures`, `SuccessAfterFailures`, and `CredentialStuffing` risk signals don't work, since they read from the table. See [Without the Table](security-log-and-emails.md#without-the-table).
 
@@ -482,6 +510,8 @@ The `Keyring\Facades\Keyring` facade is the entry point for everything you set i
 | `Keyring::unlock($user)` | Lets a locked-out user try again without a password reset. It lifts their risk lock, and clears the limits, locks, and failures in a row on the factors that can start a sign in. `Keyring::unlock($user, 'totp')` clears one factor's instead, such as a second factor that was refused at the cap. See [At the Cap](security.md#at-the-cap). |
 | `Keyring::allowSignInWhen($callback)` | Decides who may be signed in at all, such as accounts that aren't banned. See [Who May Sign In](sign-in-flow.md#who-may-sign-in). |
 | `Keyring::allowEnrollmentWhen($callback)` | Decides who may add a sign-in method, in place of the verified email rule. See [Who May Enroll](authenticators.md#who-may-enroll). |
+| `Keyring::allowImpersonationWhen($callback)` | Decides who may sign in as whom. Nobody may until it's called. See [Who May Impersonate Whom](impersonation.md#who-may-impersonate-whom). |
+| `Keyring::impersonate($request, $user)` | Signs in as another user, from a controller of your own. `Keyring::stopImpersonating($request)` goes back. See [From Your Own Code](impersonation.md#from-your-own-code). |
 | `Keyring::linkRootUsing($callback)` | Where emailed links start, in place of `APP_URL`. Identity providers' [callback URL](sso.md#the-callback-url) starts there too. See [Emailed Links](security.md#emailed-links). |
 | `Keyring::sso()` | The identity providers in `sso.providers`. `extend($driver, $resolver)` registers a [driver of your own](sso.md#custom-drivers), and `start()` and `complete()` sign in with a provider [from your own routes](sso.md#signing-up-with-a-provider). |
 | `Keyring::recordIpsUsing($callback)` | What Keyring stores as a request's IP address. See [What's Stored](security-log-and-emails.md#whats-stored). |
@@ -493,7 +523,7 @@ The `Keyring\Facades\Keyring` facade is the entry point for everything you set i
 | `Keyring::signsInAfterRegistering($user, $request)` | Whether registering signs this user in, for a registration flow of your own. |
 | `Keyring::hidesRegisteredAddresses()` | Whether registration answers the same for a taken address, which it does unless `registration.reveal_taken` is on. |
 | `Keyring::withoutProtection($callback, reason: ...)` | Changes protected attributes outside Keyring's flows. See [Protected Changes](protected-changes.md#bypassing-protection). |
-| `Keyring::activity($user, $limit = 25)` | Recent security log entries, leaving out the types in `security_log.unlisted`. See [Showing Recent Activity](security-log-and-emails.md#showing-recent-activity). |
+| `Keyring::activity($user, $limit = 25)` | Recent security log entries, leaving out the types in `security_log.unlisted`, and the impersonation entries with `impersonation.show_in_activity` off. See [Showing Recent Activity](security-log-and-emails.md#showing-recent-activity). |
 | `Keyring::unlistedActivityTypes()` | The entry types `Keyring::activity` leaves out, for an activity query of your own. See [Showing Recent Activity](security-log-and-emails.md#showing-recent-activity). |
 | `Keyring::for($user)` | The user's keyring, the same as `$user->keyring`. |
 | `Keyring::user()` | The user signed in to Keyring's guard. Throws an `AuthenticationException` when there isn't one. |
@@ -525,4 +555,6 @@ The facade also answers questions about your setup. These are useful in your own
 | `Keyring::recordedIp($request)` | The request's IP address as Keyring stores it. |
 | `Keyring::allowsSignIn($user)` | Whether the application lets this user be signed in. See [Who May Sign In](sign-in-flow.md#who-may-sign-in). |
 | `Keyring::allowsEnrollment($user)` | Whether the user may add a sign-in method. See [Who May Enroll](authenticators.md#who-may-enroll). |
+| `Keyring::allowsImpersonation($impersonator, $user)` | Whether one user may impersonate another, and `Keyring::impersonationRefusal()` why not. See [Who May Impersonate Whom](impersonation.md#who-may-impersonate-whom). |
+| `Keyring::impersonating()` | Whether the session is impersonating someone. `Keyring::impersonator()` is who, and `Keyring::impersonation()` what a [banner](impersonation.md#showing-a-banner) needs. |
 | `Keyring::authenticatorModel()` | The authenticator model's class. `deviceModel()`, `pendingChangeModel()`, `securityEventModel()`, and `failureCountModel()` do the same for theirs. |

@@ -383,11 +383,13 @@ await endOtherSessions()           // every session but this one
 
 | Function | Does |
 |---|---|
-| `listSessions()` | `GET /user/sessions`. Resolves to the sessions, most recently active first, each a `Session`: `id`, `name`, `ip`, `device`, `remembered`, `signedInAt`, `lastActiveAt`, `expiresAt`, and `current`. |
+| `listSessions()` | `GET /user/sessions`. Resolves to the sessions, most recently active first, each a `Session`: `id`, `name`, `ip`, `device`, `remembered`, `signedInAt`, `lastActiveAt`, `expiresAt`, `current`, `impersonated`, and `impersonator` (`{ name }`, or `null`). |
 | `endSession(id)` | `DELETE /user/sessions/{id}`. Ending the one marked `current` signs the user out and resolves to `{}`, so send them to the login page. |
 | `endOtherSessions()` | `DELETE /user/sessions`. |
 
 The `id` is a handle that only these routes accept. It stays the same when the session moves to a new record. It stops matching once the session has ended (or the app key is rotated without `APP_PREVIOUS_KEYS`), so list the sessions again before ending one from a list that's been open for a while. An old handle gets a `404`. Both functions that end sessions need a fresh verification, as the authenticator helpers do. [Handling Step-Up in JavaScript](#handling-step-up-in-javascript) shows how to handle that.
+
+`impersonate(id)` and `stopImpersonating()` call the [impersonation routes](impersonation.md#routes), and the `Impersonation` type describes what `Keyring::impersonation()` shares for a [banner](impersonation.md#showing-a-banner).
 
 ## Handling Step-Up in JavaScript
 
@@ -473,7 +475,7 @@ configureRoutes({
 })
 ```
 
-The keys are `prefix`, `login`, `loginOptions`, `loginWith`, `challenge`, `verify`, `send`, `challengeBase`, `enroll`, `confirmEnrollment`, `authenticator`, `proofOptions`, `sessions`, `session`, `ssoRedirect`, `ssoCallback`, and `ssoConfirm`. `challengeBase(purpose)` is the prefix the challenge routes share (`/login/challenge` for `login`, `/confirm` for `confirm`), so changing it moves all three:
+The keys are `prefix`, `login`, `loginOptions`, `loginWith`, `challenge`, `verify`, `send`, `challengeBase`, `enroll`, `confirmEnrollment`, `authenticator`, `proofOptions`, `sessions`, `session`, `ssoRedirect`, `ssoCallback`, `ssoConfirm`, `impersonate`, and `stopImpersonating`. `challengeBase(purpose)` is the prefix the challenge routes share (`/login/challenge` for `login`, `/confirm` for `confirm`), so changing it moves all three:
 
 ```ts
 configureRoutes({
@@ -583,9 +585,12 @@ public function share(Request $request): array
         'statusMessage' => fn () => Keyring::statusMessage($request->session()->get('status')),
         'keyringResult' => fn () => Keyring::result(),
         'keyringAlerts' => fn () => $request->session()->get('keyring.alerts', []),
+        'impersonation' => fn () => Keyring::impersonation($request),
     ];
 }
 ```
+
+`impersonation` is `null` unless someone is [impersonating](impersonation.md#showing-a-banner) the user, for a banner with a way back.
 
 The `login`, `forgot-password`, and `verify-email` pages already receive the translated message as their `status` prop.
 

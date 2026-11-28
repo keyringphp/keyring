@@ -15,6 +15,7 @@ use Keyring\Enums\Assurance;
 use Keyring\Enums\Category;
 use Keyring\Enums\Purpose;
 use Keyring\Factors\RecoveryCodes;
+use Keyring\Impersonation\Impersonation;
 use Keyring\KeyringManager;
 use Keyring\Sessions\SessionAssurance;
 use Keyring\UserKeyring;
@@ -153,6 +154,11 @@ class StepUp
      */
     public function require(Request $request, Requirement $requirement, array $proved = []): Response
     {
+        // Whoever is impersonating the user can't prove anything as them.
+        if (app(Impersonation::class)->active($request)) {
+            return app(Impersonation::class)->refuse($request);
+        }
+
         // Without the sign-in methods to meet it on the confirm page,
         // building on what's proved, confirming can't help: the user would
         // prove what they can and be stuck, or go round in a loop.

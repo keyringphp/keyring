@@ -26,6 +26,7 @@ The pages below are grouped by topic.
 - [Managing Authenticators](authenticators.md): adding, renaming, and removing sign-in methods, and recovery codes.
 - [Devices & Sessions](devices-and-sessions.md): device recognition, the session registry, timeouts, and pruning.
 - [Protected Changes](protected-changes.md): changing the email address and the password.
+- [Impersonation](impersonation.md): signing in as another user to see what they see, with a time limit, restrictions, and an audit trail on both accounts.
 - [Risk](risk.md): risk signals, and what to do about them.
 - [Security Log & Emails](security-log-and-emails.md): the activity log, "was this you?" alerts, and security emails.
 - [Events](events.md): every event Keyring dispatches, and what each one carries.

@@ -61,6 +61,7 @@ use Keyring\Sessions\DatabaseSessionRegistry;
 use Keyring\Sessions\RegisteredSession;
 use Keyring\Sessions\SessionRegistryManager;
 use Keyring\Sessions\Sessions;
+use Keyring\Sessions\Sweep;
 use Keyring\Tests\Fixtures\SoftDeletingUser;
 use Keyring\Tests\Fixtures\User;
 use Symfony\Component\HttpFoundation\Response;
@@ -1614,6 +1615,44 @@ describe('the database driver failing part way inside the user\'s row lock', fun
 
         expect(fn () => app(Sessions::class)->signOutOthers($request, $this->user))->toThrow(DeadlockException::class);
         Exceptions::assertReported(fn (RuntimeException $e) => $e->getMessage() === 'The follow-up failed.');
+    });
+
+    // On a connection of its own, the registry announces straight away, so
+    // the new record is revoked again rather than rolled back. Nobody used
+    // it, so the sweep doesn't announce it later either.
+    it('leaves the new record unannounced by the sweep too, when the limit fails to end a session on a registry of its own', function () {
+        $connection = registryOnItsOwnConnection();
+        Schema::connection($connection)->table('keyring_sessions', function (Blueprint $table) {
+            $table->unsignedInteger('announced_at')->nullable();
+            $table->string('end_reason', 32)->nullable();
+            $table->unsignedTinyInteger('announce_attempts')->default(0);
+            $table->unsignedInteger('announce_after')->nullable();
+        });
+        $driver = $this->driver;
+        $failing = $this->failing;
+        app(SessionRegistryManager::class)->extend('failing-own', fn () => new class(DB::connection($connection), $driver, $failing) extends DatabaseSessionRegistry
+        {
+            public function __construct(ConnectionInterface $connection, private readonly DatabaseSessionRegistry $driver, private readonly string $failing)
+            {
+                parent::__construct($connection);
+            }
+
+            public function revoke(#[SensitiveParameter] string $id): ?RegisteredSession
+            {
+                return $id === $this->failing ? throw $this->driver->failure : parent::revoke($id);
+            }
+        });
+        config(['keyring.sessions.driver' => 'failing-own', 'keyring.sessions.max' => 1]);
+        sessionElsewhere($this->user, activeAgo: 20, id: $this->failing);
+
+        $this->post('/login', ['email' => 'taylor@example.com', 'password' => 'password'])->assertServerError();
+        $this->assertGuest();
+
+        $this->travel(Sweep::GRACE + 1)->seconds();
+        $this->artisan('keyring:sweep')->assertSuccessful();
+
+        expect($this->announced)->toBeEmpty()
+            ->and(DB::connection($connection)->table('keyring_sessions')->whereNotNull('revoked_at')->whereNull('announced_at')->count())->toBe(0);
     });
 });
 

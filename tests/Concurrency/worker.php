@@ -12,6 +12,7 @@ use Illuminate\Auth\AuthenticationException;
 use Illuminate\Cache\Repository;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Artisan;
+use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Event;
 use Illuminate\Support\Sleep;
@@ -150,6 +151,22 @@ try {
             return 'added';
         })(),
         'sign-out' => app(Sessions::class)->signOutEverywhere(User::findOrFail($id)),
+        'stop-impersonating' => (function () use ($id, $value) {
+            // A stop, which moves the impersonator's record as it goes
+            // back, holding their row. The browser's session is what the
+            // race hands over. Which request ends it is claimed in the rate
+            // limiter's store, kept in the database so every side sees it.
+            config(['cache.limiter' => 'database']);
+            $request = Request::create('/impersonate', 'DELETE');
+            $request->setLaravelSession($session = app('session.store'));
+            $session->replace(json_decode($value, true));
+            app()->instance('request', $request);
+
+            app('auth')->forgetGuards();
+            Auth::guard(config('keyring.guard'))->setUser(User::findOrFail($id));
+
+            return Keyring::stopImpersonating($request) === null ? 'signed out' : 'back';
+        })(),
         'end-latest' => (function () use ($id) {
             // Read while the row is held, as a request that found the cookie used.
             $session = app(SessionRegistry::class)->find($id);

@@ -26,4 +26,13 @@ class User extends Authenticatable implements MustVerifyEmail
             'password' => 'hashed',
         ];
     }
+
+    /**
+     * For the docs' impersonation examples: whoever's address starts with
+     * "admin@".
+     */
+    public function isAdmin(): bool
+    {
+        return str_starts_with((string) $this->getAttribute('email'), 'admin@');
+    }
 }

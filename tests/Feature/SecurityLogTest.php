@@ -309,6 +309,15 @@ it('gives the types activity leaves out, as a list', function () {
     expect(Keyring::unlistedActivityTypes())->toBe(['token_issued', 'token_revoked']);
 });
 
+it('gives the impersonation types with impersonation.show_in_activity off, whatever security_log.unlisted holds', function (mixed $unlisted, array $types) {
+    config(['keyring.impersonation.show_in_activity' => false, 'keyring.security_log.unlisted' => $unlisted]);
+
+    expect(Keyring::unlistedActivityTypes())->toBe($types);
+})->with([
+    'nothing' => [null, ['impersonation_started', 'impersonation_ended']],
+    'a type of its own' => [['token_issued'], ['token_issued', 'impersonation_started', 'impersonation_ended']],
+]);
+
 // Packages push to the list without the app seeing it. One that logged its
 // back-channel logouts as signed_out and listed that would take the user's
 // own sign outs off their page too. So would any spelling the database

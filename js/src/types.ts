@@ -151,4 +151,26 @@ export interface Session {
   lastActiveAt: string
   expiresAt: string
   current: boolean
+  /**
+   * Someone else is signed in to it as the user, e.g. support. Its `name`,
+   * `ip` and `device` are then always null: they'd be that person's.
+   */
+  impersonated: boolean
+  /**
+   * Who that is, by name only, or null when nobody else is in it or the
+   * impersonator has been deleted.
+   */
+  impersonator: { name: string | null } | null
+}
+
+/**
+ * Who is impersonating the signed-in user, as Keyring::impersonation()
+ * gives it to share with every page, for a banner with a way to stop.
+ * Share null when nobody is.
+ */
+export interface Impersonation {
+  impersonator: { id: string, name: string | null }
+  startedAt: string
+  expiresAt: string
+  stopUrl: string | null
 }

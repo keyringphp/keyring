@@ -49,6 +49,8 @@ describe('routes', () => {
     expect(routes.enroll('totp')).toBe('/account/user/authenticators/totp')
     expect(routes.sessions()).toBe('/account/user/sessions')
     expect(routes.session('9f2c')).toBe('/account/user/sessions/9f2c')
+    expect(routes.impersonate('42')).toBe('/account/impersonate/42')
+    expect(routes.stopImpersonating()).toBe('/account/impersonate')
 
     configureRoutes({ prefix: '' })
 
@@ -64,6 +66,7 @@ describe('routes', () => {
     expect(routes.authenticator('abc?default=1#x')).toBe('/user/authenticators/abc%3Fdefault%3D1%23x')
     expect(routes.session('9f2c/../../logout')).toBe('/user/sessions/9f2c%2F..%2F..%2Flogout')
     expect(routes.session('a b%2Fc')).toBe('/user/sessions/a%20b%252Fc')
+    expect(routes.impersonate('1/../logout')).toBe('/impersonate/1%2F..%2Flogout')
     expect(routes.enroll('totp/../../password')).toBe('/user/authenticators/totp%2F..%2F..%2Fpassword')
     expect(routes.confirmEnrollment('totp?x')).toBe('/user/authenticators/totp%3Fx/confirm')
     expect(routes.loginOptions('passkey/../..')).toBe('/login/passkey%2F..%2F../options')

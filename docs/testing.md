@@ -4,6 +4,7 @@
 - [Setting Up](#setting-up)
 - [Acting at an Assurance Level](#acting-at-an-assurance-level)
 - [Acting With Real Authenticators](#acting-with-real-authenticators)
+- [Impersonating](#impersonating)
 - [Faking Factors](#faking-factors)
 - [Factories](#factories)
 - [Virtual Authenticators](#virtual-authenticators)
@@ -102,6 +103,25 @@ $this->actingAs($user)->withAssurance(Assurance::AAL1)
 ```
 
 The `verifiedWith` method accepts any number of authenticators and pretends the session verified the password and each one you pass. The level is whatever those reach, so a password and an authenticator app give AAL2. This means `verifiedWith` takes the place of `withAssurance`, and you may still chain `freshAt` with it, as before. Reach for `verifiedWith` when a test's user has a passkey or security key and calls a route behind `keyring.fresh`, such as adding another sign-in method. That route asks for the key, which `withAssurance(Assurance::AAL2)` doesn't pretend to have proved.
+
+## Impersonating
+
+[Starting an impersonation](impersonation.md#starting) takes two factors proved in the last 15 minutes by default, so act at AAL2 to start one, once your callback says who may:
+
+```php
+use Keyring\Enums\Assurance;
+use Keyring\Facades\Keyring;
+
+$this->actingAs($admin)->withAssurance(Assurance::AAL2)
+    ->post(route('keyring.impersonation.store', $user))
+    ->assertRedirect('/dashboard');
+
+$this->assertAuthenticatedAs($user);
+expect(Keyring::impersonating())->toBeTrue()
+    ->and(Keyring::impersonator()->is($admin))->toBeTrue();
+```
+
+`/dashboard` is your `impersonation.redirect_url`, or `home`. Later requests in the same test carry on as the user, and `delete(route('keyring.impersonation.destroy'))` goes back to the admin. Remember that step-up can't be met while impersonating, so a route of yours behind `keyring:aal2` or `keyring.fresh` answers `403` until it stops. The admin comes back at AAL1, with nothing counting as fresh, so after the stop that route sends them to confirm. A test that stops and then visits one needs `withAssurance()` again first.
 
 ## Faking Factors
 

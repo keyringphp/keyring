@@ -7,6 +7,7 @@ namespace Keyring\Sessions;
 use Illuminate\Container\Attributes\Scoped;
 use Illuminate\Contracts\Session\Session;
 use Keyring\Enums\Assurance;
+use Keyring\Enums\Category;
 use Keyring\Enums\Purpose;
 use Keyring\KeyringManager;
 use Keyring\Login\AttemptStore;
@@ -71,6 +72,39 @@ class SessionAssurance
 
         $this->session->put(static::KEY, $stored);
         $this->session->put(static::ACTIVE, now()->getTimestamp());
+    }
+
+    /**
+     * Bring the session down to AAL1 at most, so anything that asks for
+     * more asks for the second factor again. Of what it proved, only as
+     * much as stays short of AAL2 is kept, what isn't something the user
+     * has first: a password beside an authenticator app keeps the password,
+     * while an authenticator app's code on its own, short of AAL2 alone, is
+     * kept as it is. What's kept still counts as before, so stepping up
+     * asks for the second factor alone. A session that proved nothing short
+     * of AAL2, a passkey that verified the user being both factors at once,
+     * keeps nothing.
+     *
+     * The level the session signed in at isn't touched, so under
+     * sessions.end_on_lapse one that signed in above AAL1 lapses from here.
+     *
+     * @internal
+     */
+    public function lowerToAal1(): void
+    {
+        $kept = [];
+        $stored = $this->session->get(static::KEY, []);
+
+        // What isn't something the user has goes first, so it's what's kept.
+        uasort($stored, fn (array $a, array $b) => in_array(Category::Possession->value, $a['categories'], true) <=> in_array(Category::Possession->value, $b['categories'], true));
+
+        foreach ($stored as $key => $verification) {
+            if (! Assurance::of(array_map(Verification::fromArray(...), [...array_values($kept), $verification]))->atLeast(Assurance::AAL2)) {
+                $kept[$key] = $verification;
+            }
+        }
+
+        $this->session->put(static::KEY, $kept);
     }
 
     /**

@@ -31,6 +31,9 @@ final class KeyedHash
     /** The handle a page knows one of a user's sessions by. */
     public const string SESSION_HANDLES = 'session-handles';
 
+    /** The claim on announcing an impersonation's end. */
+    public const string IMPERSONATION_ENDS = 'impersonation-ends';
+
     public static function make(string $purpose, #[\SensitiveParameter] string $value): string
     {
         return self::candidates($purpose, $value)[0];

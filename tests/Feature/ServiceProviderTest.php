@@ -163,6 +163,25 @@ it('refuses a feature it doesn\'t know, rather than leaving it off', function ()
     new KeyringServiceProvider($this->app)->boot();
 })->throws(UnknownFeature::class, 'Unknown Keyring features in config/keyring.php: [device]');
 
+it('refuses an impersonation.lifetime that isn\'t a duration at boot, with the feature on', function (mixed $lifetime) {
+    config(['keyring.features' => [Features::impersonation()], 'keyring.impersonation.lifetime' => $lifetime]);
+
+    expect(fn () => new KeyringServiceProvider($this->app)->boot())
+        ->toThrow(InvalidArgumentException::class, 'Keyring\'s [keyring.impersonation.lifetime] option is '.json_encode($lifetime).'.');
+})->with(['a typo' => ['1 hour'], 'nothing' => ['0'], 'not text' => [[3600]]]);
+
+it('takes any duration for impersonation.lifetime, or null for an hour, and doesn\'t look with the feature off', function () {
+    foreach (['30m', 3600, '90', null] as $lifetime) {
+        config(['keyring.features' => [Features::impersonation()], 'keyring.impersonation.lifetime' => $lifetime]);
+
+        expect(fn () => new KeyringServiceProvider($this->app)->boot())->not->toThrow(InvalidArgumentException::class);
+    }
+
+    config(['keyring.features' => [], 'keyring.impersonation.lifetime' => 'forever']);
+
+    expect(fn () => new KeyringServiceProvider($this->app)->boot())->not->toThrow(InvalidArgumentException::class);
+});
+
 /**
  * The app as it is before anything has asked for the rate limiter, kept in
  * a cache store that only exists once another package has booted: Octane

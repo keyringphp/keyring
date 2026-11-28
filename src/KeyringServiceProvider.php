@@ -23,6 +23,7 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Event;
 use Illuminate\Support\Facades\Route;
 use Illuminate\Support\ServiceProvider;
+use InvalidArgumentException;
 use Keyring\Activity\DispatchLaravelEvents;
 use Keyring\Activity\RecordSecurityEvents;
 use Keyring\Contracts\LocatesIps;
@@ -33,6 +34,7 @@ use Keyring\Exceptions\EmailVerificationRequired;
 use Keyring\Exceptions\MissingAction;
 use Keyring\Exceptions\UnknownFeature;
 use Keyring\Http\Middleware\AuthenticateSession;
+use Keyring\Http\Middleware\RefuseWhileImpersonating;
 use Keyring\Http\Middleware\RequireAssurance;
 use Keyring\Http\Middleware\RequireEnrollment;
 use Keyring\Http\Middleware\RequireFreshVerification;
@@ -110,6 +112,12 @@ class KeyringServiceProvider extends ServiceProvider
             throw UnknownFeature::in($unknown);
         }
 
+        // A lifetime that isn't a duration would only show at the first
+        // impersonation.
+        if (Features::enabled(Features::impersonation())) {
+            $this->checkImpersonationLifetime();
+        }
+
         // Registration that hides who has an account leaves new users signed
         // out until they verify their address. Without the feature none ever
         // could, so say so now rather than at the first registration.
@@ -151,6 +159,7 @@ class KeyringServiceProvider extends ServiceProvider
         $router->aliasMiddleware('keyring.enrolled', RequireEnrollment::class);
         $router->aliasMiddleware('keyring.password', RequirePasswordChange::class);
         $router->aliasMiddleware('keyring.signed', ValidateSignature::class);
+        $router->aliasMiddleware('keyring.not-impersonating', RefuseWhileImpersonating::class);
 
         if (config('keyring.sessions.middleware')) {
             $this->app->make(HttpKernel::class)->appendMiddlewareToGroup('web', AuthenticateSession::class);
@@ -259,6 +268,19 @@ class KeyringServiceProvider extends ServiceProvider
                 ->by($request->ip())
                 ->response(new TooManyAttempts('keyring-login-options')));
         });
+    }
+
+    protected function checkImpersonationLifetime(): void
+    {
+        $lifetime = config('keyring.impersonation.lifetime') ?? '1h';
+        $seconds = is_string($lifetime) || is_int($lifetime) ? rescue(fn () => Duration::seconds($lifetime), 0, report: false) : 0;
+
+        if ($seconds < 1) {
+            throw new InvalidArgumentException(sprintf(
+                'Keyring\'s [keyring.impersonation.lifetime] option is %s. Set it to a duration longer than nothing, such as "1h" or "30m", or to null for an hour.',
+                json_encode($lifetime),
+            ));
+        }
     }
 
     /**

@@ -29,11 +29,14 @@ use Keyring\Concerns\SwapsModels;
 use Keyring\Contracts\Factor;
 use Keyring\Contracts\PrimaryFactor;
 use Keyring\Devices\UserAgent;
+use Keyring\Enums\ImpersonationRefusal;
 use Keyring\Enums\Purpose;
 use Keyring\Exceptions\EmailVerificationRequired;
+use Keyring\Exceptions\ImpersonationRefused;
 use Keyring\Exceptions\MissingTrait;
 use Keyring\Factors\FactorRegistry;
 use Keyring\Factors\Password;
+use Keyring\Impersonation\Impersonation;
 use Keyring\Login\Attempt;
 use Keyring\Login\AttemptStore;
 use Keyring\Login\Requirement;
@@ -73,6 +76,9 @@ class KeyringManager
 
     /** @var (Closure(Authenticatable&Model): bool)|null */
     protected ?Closure $enrollmentGate = null;
+
+    /** @var (Closure(Authenticatable&Model, Authenticatable&Model): bool)|null */
+    protected ?Closure $impersonationGate = null;
 
     /** @var (Closure(Request): (string|null))|null */
     protected ?Closure $ipRecorder = null;
@@ -241,7 +247,8 @@ class KeyringManager
     /**
      * The entry types activity() leaves out, for an activity query of the
      * app's own: the strings in "security_log.unlisted", without Keyring's
-     * own types.
+     * own types, and the impersonation types when
+     * "impersonation.show_in_activity" is false.
      *
      * @return list<string>
      */
@@ -466,6 +473,118 @@ class KeyringManager
         throw_if(Features::enabled(Features::registration()) && ! $verifies, EmailVerificationRequired::forEnrollment($user::class));
 
         return ! $user instanceof MustVerifyEmail || $user->hasVerifiedEmail();
+    }
+
+    /**
+     * Decide who may sign in as whom, with Features::impersonation(): given
+     * the impersonator, then the user. Until this is called nobody may. It's
+     * never asked about someone impersonating themselves, an account
+     * Keyring's guard wouldn't load, or a user the app doesn't let sign in
+     * (allowSignInWhen): those are always refused.
+     *
+     *     Keyring::allowImpersonationWhen(fn (User $impersonator, User $user) => $impersonator->isAdmin() && ! $user->isAdmin());
+     *
+     * It's asked again on every request while the impersonation lasts,
+     * when the signed-in user is the one being impersonated, so decide
+     * from its two arguments alone: not auth()->user(), $request->user()
+     * or Gate::allows(), which would ask about the user. For a gate, ask
+     * Gate::forUser($impersonator)->allows(...). One that throws on those
+     * requests is reported and counts as a no, ending the impersonation,
+     * rather than failing every request the browser makes. Asked before
+     * starting, and by allowsImpersonation(), what it throws is thrown on.
+     *
+     * @param  Closure(Authenticatable&Model, Authenticatable&Model): bool  $callback
+     */
+    public function allowImpersonationWhen(Closure $callback): static
+    {
+        $this->impersonationGate = $callback;
+
+        return $this;
+    }
+
+    /**
+     * Whether $impersonator may sign in as $user, for a button that only
+     * shows when they may. Starting asks more: that the impersonator isn't
+     * impersonating already, and is in a session Keyring keeps track of.
+     */
+    public function allowsImpersonation(Authenticatable&Model $impersonator, Authenticatable&Model $user): bool
+    {
+        return $this->impersonationRefusal($impersonator, $user) === null;
+    }
+
+    /**
+     * Why $impersonator may not sign in as $user, or null when they may:
+     * Disabled, NoCallback, Self or NotAllowed, in that order. Like
+     * allowsImpersonation(), it doesn't ask what starting asks of the
+     * session too.
+     */
+    public function impersonationRefusal(Authenticatable&Model $impersonator, Authenticatable&Model $user): ?ImpersonationRefusal
+    {
+        return match (true) {
+            ! Features::enabled(Features::impersonation()) => ImpersonationRefusal::Disabled,
+            $this->impersonationGate === null => ImpersonationRefusal::NoCallback,
+            $impersonator->is($user) => ImpersonationRefusal::Self,
+            ! $this->belongsToGuard($impersonator),
+            ! $this->belongsToGuard($user),
+            ! $this->allowsSignIn($user),
+            ($this->impersonationGate)($impersonator, $user) !== true => ImpersonationRefusal::NotAllowed,
+            default => null,
+        };
+    }
+
+    /**
+     * Sign the browser in as $user, on behalf of whoever is signed in, for a
+     * controller of your own: Keyring's keyring.impersonation.store route
+     * calls this. Check the request is a POST that proved enough first, as
+     * that route's middleware does, and block() the route as it is, so two
+     * starts sent at once take turns. Nothing the impersonator proved carries
+     * over, and the session can't prove anything as the user.
+     *
+     * @throws ImpersonationRefused
+     */
+    public function impersonate(Request $request, Authenticatable&Model $user): void
+    {
+        app(Impersonation::class)->start($request, $user);
+    }
+
+    /**
+     * Stop impersonating. Returns the impersonator, back in their own
+     * session, or null when that session had ended and the browser was
+     * signed out instead.
+     *
+     * @throws LogicException when nobody is being impersonated
+     */
+    public function stopImpersonating(Request $request): (Authenticatable&Model)|null
+    {
+        return app(Impersonation::class)->stop($request);
+    }
+
+    /**
+     * Whether the request's session is impersonating someone.
+     */
+    public function impersonating(?Request $request = null): bool
+    {
+        return app(Impersonation::class)->active($request ?? request());
+    }
+
+    /**
+     * Who is impersonating the signed-in user, or null when nobody is.
+     */
+    public function impersonator(?Request $request = null): (Authenticatable&Model)|null
+    {
+        return app(Impersonation::class)->impersonator($request ?? request());
+    }
+
+    /**
+     * The impersonation for a page to show: who is impersonating, since
+     * when, until when, and where to stop. Null when nobody is. It's read
+     * from the session, so it's cheap to share with every page.
+     *
+     * @return array{impersonator: array{id: string, name: ?string}, startedAt: string, expiresAt: string, stopUrl: ?string}|null
+     */
+    public function impersonation(?Request $request = null): ?array
+    {
+        return app(Impersonation::class)->toArray($request ?? request());
     }
 
     /**

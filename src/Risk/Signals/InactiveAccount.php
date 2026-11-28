@@ -20,7 +20,8 @@ use Keyring\Support\Duration;
  * It goes by when the account's devices last signed in, so it needs
  * Features::devices(), and it says nothing about an account Keyring has no
  * sign in on record for. One with a session still in use isn't quiet,
- * however long ago that session began.
+ * however long ago that session began, unless it's impersonated: that's
+ * someone else in the account, not its owner.
  */
 class InactiveAccount extends Signal
 {
@@ -56,10 +57,11 @@ class InactiveAccount extends Signal
     }
 
     /**
-     * Whether one of the user's sessions has been used since the given time.
+     * Whether one of the user's own sessions has been used since the given
+     * time. An impersonated one is someone else using the account.
      */
     protected function inUseSince(Assessment $assessment, int $since): bool
     {
-        return $this->sessions->forUser($assessment->user)->contains(fn (RegisteredSession $session) => $session->lastActivityAt > $since);
+        return $this->sessions->forUser($assessment->user)->contains(fn (RegisteredSession $session) => ! $session->isImpersonated() && $session->lastActivityAt > $since);
     }
 }

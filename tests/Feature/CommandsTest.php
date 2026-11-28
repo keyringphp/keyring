@@ -294,6 +294,12 @@ describe('keyring:install', function () {
         expect(file_exists(config_path('keyring.php')))->toBeFalse();
     });
 
+    it('lists every feature in its --feature help', function () {
+        $help = Artisan::all()['keyring:install']->getDefinition()->getOption('feature')->getDescription();
+
+        expect(Str::after($help, '): '))->toBe(collect(Features::all())->join(', ', ' or '));
+    });
+
     it('says where to tell the emails who users can contact', function () {
         $this->artisan('keyring:install', ['--factor' => ['totp'], '--no-interaction' => true])
             ->expectsOutputToContain('Set support_contact in config/keyring.php')

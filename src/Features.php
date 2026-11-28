@@ -38,6 +38,7 @@ final class Features
             self::devices(),
             self::emailChanges(),
             self::securityLog(),
+            self::impersonation(),
         ];
     }
 
@@ -110,5 +111,15 @@ final class Features
     public static function securityLog(): string
     {
         return 'security-log';
+    }
+
+    /**
+     * Let someone sign in as another user, to see the app as they do, and
+     * come back to their own account. Nobody may until
+     * Keyring::allowImpersonationWhen() says who may impersonate whom.
+     */
+    public static function impersonation(): string
+    {
+        return 'impersonation';
     }
 }

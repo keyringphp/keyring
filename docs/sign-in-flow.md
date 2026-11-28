@@ -354,6 +354,8 @@ Keyring::signInAfterRegistering(fn (User $user, Request $request) => ! $user->ne
 
 The response also sends `Clear-Site-Data: "cache", "storage"`. It leaves cookies alone, so the device cookie survives and the next sign in isn't treated as a new device.
 
+Signing out while [impersonating](impersonation.md#signing-out-while-impersonating) signs the browser out of the impersonator's own session too, and leaves the user's "remember me" token alone.
+
 To sign the current user out the same way from your own code, use the `out` method on `Keyring\Login\SignIn`. It returns the user who was signed out, or `null`. Keep in mind that it doesn't dispatch `LoggedOut`. For example:
 
 ```php
@@ -474,7 +476,7 @@ Each outcome is answered by a response class, bound to a contract in `Keyring\Co
 | `LogoutResponse` | The user signed out. | Redirect to `/`. JSON: `204`. Both send `Clear-Site-Data`. |
 | `RegisterResponse` | A new user registered and was signed in, with [`registration.reveal_taken`](#saying-when-an-address-is-taken). | The same as `AuthenticatedResponse`. |
 | `StatusResponse` | Every other action: a code sent, a password changed, a device signed out... | See [Status Responses](#status-responses). |
-| `SignedOutResponse` | A session was ended for the user: revoked, timed out, or signed out by a risk response. Built with the `reason`. | Redirect to the login page with the `signed-out` status, which brings them back afterwards. JSON: `401` with `"page": "login"` and `redirect`. Both send `Clear-Site-Data`. Not used for page visits to [routes that also serve guests](devices-and-sessions.md#pages-that-also-serve-guests). |
+| `SignedOutResponse` | A session was ended for the user: revoked, timed out, or signed out by a risk response, or an [impersonation](impersonation.md#security-log-and-events) ended with nothing to go back to. Built with the `reason`. | Redirect to the login page with the `signed-out` status, which brings them back afterwards. JSON: `401` with `"page": "login"` and `redirect`. Both send `Clear-Site-Data`. Not used for page visits to [routes that also serve guests](devices-and-sessions.md#pages-that-also-serve-guests). |
 | `ConfirmationRequiredResponse` | A route needs [step-up](step-up.md) first. | Redirect to the confirm page, which brings them back afterwards. JSON: `423` with `"page": "confirm"` and `redirect`. |
 | `EnrollmentRequiredResponse` | A route needs a sign-in method the user hasn't set up. | Redirect to `enrollment_url` with the `enroll-first` status, or `403` without one. JSON: `403`. |
 | `PasswordChangeRequiredResponse` | The user has to [choose a new password](protected-changes.md#requiring-a-password-change) before going on. | Redirect to `password_change_url` with the `change-password` status, or `403` without one. JSON: `403`. |
@@ -571,7 +573,7 @@ Two statuses can say where the user was going when Keyring sent them away. That 
 
 The messages live in `lang/en/status.php`, as `keyring::status.{slug}`. The pages Keyring renders that show a status (`login`, `forgot-password`, and `verify-email`) receive the translated message as their `status` prop, not the slug. The slugs are:
 
-`authenticator-added`, `authenticator-removed`, `authenticator-updated`, `change-password`, `code-sent`, `device-reported`, `device-revoked`, `email-change-cancelled`, `email-change-confirmed`, `email-change-invalid`, `email-change-requested`, `email-change-reverted`, `email-changed`, `email-verified`, `enroll-first`, `enrollment-started`, `password-reset`, `password-updated`, `registered`, `registration-received`, `reset-link-sent`, `session-revoked`, `sessions-revoked`, `sign-in-to-verify`, `signed-out`, `sso-cancelled` and `verification-link-sent`.
+`authenticator-added`, `authenticator-removed`, `authenticator-updated`, `change-password`, `code-sent`, `device-reported`, `device-revoked`, `email-change-cancelled`, `email-change-confirmed`, `email-change-invalid`, `email-change-requested`, `email-change-reverted`, `email-changed`, `email-verified`, `enroll-first`, `enrollment-started`, `impersonating`, `impersonation-ended`, `impersonation-refused`, `impersonation-started`, `not-impersonating`, `password-reset`, `password-updated`, `registered`, `registration-received`, `reset-link-sent`, `session-revoked`, `sessions-revoked`, `sign-in-to-verify`, `signed-out`, `sso-cancelled` and `verification-link-sent`.
 
 You can swap it the same way as the others. Your class receives the same named arguments:
 

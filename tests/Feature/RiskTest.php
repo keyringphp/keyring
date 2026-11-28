@@ -783,6 +783,26 @@ describe('a sign in after a long quiet period', function () {
         signInAs(CHROME)->assertRedirect('/dashboard');
     });
 
+    // Someone else signed in as the user isn't the user using the account.
+    it('still calls an account quiet while someone impersonates it', function () {
+        Keyring::risk()->signals([InactiveAccount::class])->respond(fn (Risk $risk) => $risk->has('inactive_account') ? Action::deny() : Action::allow());
+        $cookie = lastSignedIn(daysAgo: 91);
+        $admin = User::create(['name' => 'Ada Admin', 'email' => 'admin@example.com', 'password' => 'password', 'email_verified_at' => now()]);
+        $totp = Authenticator::factory()->totp()->for($admin, 'authenticatable')->create();
+        Keyring::allowImpersonationWhen(fn (User $impersonator) => $impersonator->is($admin));
+
+        $this->post('/login', ['email' => 'admin@example.com', 'password' => 'password']);
+        $this->post(route('keyring.login.verify', 'totp'), ['code' => totpCode($totp->secret)])->assertRedirect('/dashboard');
+        $this->post(route('keyring.impersonation.store', $this->user->getKey()))->assertRedirect('/dashboard');
+        $this->flushSession();
+        app('auth')->forgetGuards();
+
+        expect(app(SessionRegistry::class)->forUser($this->user)->sole()->isImpersonated())->toBeTrue();
+
+        signInAs(cookies: ['known_device' => $cookie])->assertSessionHasErrors('email');
+        $this->assertGuest();
+    });
+
     it('does nothing without devices, which is where it reads the last sign in', function () {
         Keyring::risk()->signals([app()->make(InactiveAccount::class, ['score' => 95])]);
         lastSignedIn(daysAgo: 91);
