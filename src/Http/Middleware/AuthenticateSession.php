@@ -70,7 +70,7 @@ class AuthenticateSession
             // next sign in on this session to go back with: it ends, and
             // the browser is signed out.
             if (app(Impersonation::class)->active($request)) {
-                return $this->endImpersonation($request, ImpersonationEndReason::Ended);
+                return $this->endImpersonation($request, ImpersonationEndReason::Revoked);
             }
 
             return tap($next($request), function () use ($request, $guard) {

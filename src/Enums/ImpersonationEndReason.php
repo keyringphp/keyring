@@ -6,7 +6,7 @@ namespace Keyring\Enums;
 
 /**
  * Why an impersonation ended (ImpersonationEnded). It ends back in the
- * impersonator's own session for Stopped, Expired and Ended, as long as
+ * impersonator's own session for Stopped, Expired and Revoked, as long as
  * that session is still good: otherwise the browser is signed out, and the
  * reason is ImpersonatorSessionEnded, or Lost.
  */
@@ -19,12 +19,12 @@ enum ImpersonationEndReason: string
     case Expired = 'expired';
 
     /**
-     * Its session was ended some other way: by the user from their sessions
+     * Its session was revoked some other way: by the user from their sessions
      * list, by signing out everywhere, a password change, a risk response,
      * the user no longer being allowed to sign in, or the impersonator no
      * longer being allowed to impersonate them.
      */
-    case Ended = 'ended';
+    case Revoked = 'revoked';
 
     /**
      * The impersonator's own session has ended (revoked, timed out), or the
@@ -68,6 +68,6 @@ enum ImpersonationEndReason: string
      */
     public function returns(): bool
     {
-        return in_array($this, [self::Stopped, self::Expired, self::Ended], true);
+        return in_array($this, [self::Stopped, self::Expired, self::Revoked], true);
     }
 }

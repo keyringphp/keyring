@@ -492,13 +492,13 @@ class Impersonation
         if ($parked === null || $session === null || $session->impersonatorSession !== $parked['session'] || ! $session->belongsTo($user)
             || $session->replacedBy !== null || ($session->revokedAt !== null && ! $this->sessions->timedOut($session))
             || ! $this->keyring->allowsSignIn($user)) {
-            return ImpersonationEndReason::Ended;
+            return ImpersonationEndReason::Revoked;
         }
 
         $impersonator = $this->impersonatorFrom($parked);
 
         return match (true) {
-            $impersonator !== null && ! rescue(fn () => $this->keyring->allowsImpersonation($impersonator, $user), false) => ImpersonationEndReason::Ended,
+            $impersonator !== null && ! rescue(fn () => $this->keyring->allowsImpersonation($impersonator, $user), false) => ImpersonationEndReason::Revoked,
             $now >= $parked['expires_at'] || ! $session->isActive($now) || $this->sessions->idledOut($session, $now) => ImpersonationEndReason::Expired,
             $this->returnable($parked, $impersonator) === null => ImpersonationEndReason::ImpersonatorSessionEnded,
             default => null,

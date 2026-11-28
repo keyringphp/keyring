@@ -1399,7 +1399,7 @@ describe('ending by itself', function () {
         $this->get('/whoami')->assertRedirect('/dashboard');
 
         expect(session(Sessions::KEY))->toBe(record($own)->replacedBy)
-            ->and(SecurityEvent::query()->where('type', 'impersonation_ended')->get()->pluck('meta.reason')->unique()->all())->toBe(['ended']);
+            ->and(SecurityEvent::query()->where('type', 'impersonation_ended')->get()->pluck('meta.reason')->unique()->all())->toBe(['revoked']);
     });
 
     it('ends when the user may no longer sign in', function () {
@@ -1459,7 +1459,7 @@ describe('ending by itself', function () {
 
         expect(session(Sessions::KEY))->toBe(record($own)->replacedBy)
             ->and($this->get('/whoami')->getContent())->toBe((string) $this->admin->getKey())
-            ->and(SecurityEvent::query()->where('type', 'impersonation_ended')->get()->pluck('meta.reason')->unique()->all())->toBe(['ended']);
+            ->and(SecurityEvent::query()->where('type', 'impersonation_ended')->get()->pluck('meta.reason')->unique()->all())->toBe(['revoked']);
     });
 
     // Thrown, it would fail every request the browser makes, stopping and
@@ -1473,7 +1473,7 @@ describe('ending by itself', function () {
 
         expect(session(Sessions::KEY))->toBe(record($own)->replacedBy)
             ->and($this->get('/whoami')->getContent())->toBe((string) $this->admin->getKey())
-            ->and(SecurityEvent::query()->where('type', 'impersonation_ended')->get()->pluck('meta.reason')->unique()->all())->toBe(['ended']);
+            ->and(SecurityEvent::query()->where('type', 'impersonation_ended')->get()->pluck('meta.reason')->unique()->all())->toBe(['revoked']);
         Exceptions::assertReported(fn (RuntimeException $e) => $e->getMessage() === 'The roles service is down.');
     });
 
@@ -1771,7 +1771,7 @@ describe('two requests ending it', function () {
         config(['keyring.sessions.driver' => 'database']);
 
         expect($ended)->toHaveCount(1)
-            ->and($ended[0]->reason)->toBe(ImpersonationEndReason::Ended)
+            ->and($ended[0]->reason)->toBe(ImpersonationEndReason::Revoked)
             ->and($ended[0]->returned)->toBeTrue()
             ->and(SecurityEvent::query()->where('type', 'impersonation_ended')->count())->toBe(2)
             ->and(record(record($own)->replacedBy)->isActive(now()->getTimestamp()))->toBeTrue()
