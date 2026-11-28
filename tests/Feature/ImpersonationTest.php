@@ -452,7 +452,7 @@ describe('who may impersonate', function () {
 
         expect($unknown->getContent())->toBe($refused->getContent())
             ->and(Auth::id())->toBe($this->admin->getKey())
-            ->and(SecurityEvent::query()->where('type', 'impersonation_refused')->oldest('id')->get()->pluck('meta')->all())->toBe([
+            ->and(SecurityEvent::query()->where('type', 'impersonation_refused')->oldest('id')->get()->pluck('meta')->all())->toEqual([
                 ['reason' => 'not_found', 'user' => 'abc'],
                 ['reason' => 'not_allowed', 'user' => (string) $this->user->getKey()],
             ]);
@@ -2605,7 +2605,12 @@ describe('the session record', function () {
         adminSignsIn();
         $schema = 0;
         DB::listen(function ($query) use (&$schema) {
-            $schema += (int) str_contains($query->sql, 'pragma_table_xinfo');
+            // What each database asks to list a table's columns.
+            $schema += (int) str_contains($query->sql, match (DB::getDriverName()) {
+                'pgsql' => 'pg_attribute',
+                'mysql', 'mariadb' => 'information_schema',
+                default => 'pragma_table_xinfo',
+            });
         });
 
         $become()->assertOk();
@@ -2626,7 +2631,10 @@ describe('the session record', function () {
         $schema = 0;
         $this->withoutExceptionHandling();
 
-        expect(fn () => $become())->toThrow(QueryException::class)
+        // On Postgres in a savepoint, since a failed query there spoils the
+        // rest of the test's transaction. (MySQL's column drop above already
+        // committed it.)
+        expect(DB::getDriverName() === 'pgsql' ? fn () => DB::transaction($become) : $become)->toThrow(QueryException::class)
             ->and($schema)->toBe(0);
 
         // Once that's gone, it asks again, and a no isn't kept.
